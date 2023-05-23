@@ -1,6 +1,11 @@
 # Smart-Music-Go
 
-A basic web application that interacts with the Spotify API.
+"Smart-Music-Go" is a music search tool that showcases the capabilities of Go in web development and provides a starting point for a more feature-rich music application.
+
+The purpose of this project is to create a web application using the Go programming language that interacts with the Spotify Web API. The project serves as a practical example of how to build a web application with Go, demonstrating key aspects such as setting up a web server, handling HTTP requests and responses, structuring the project with packages, and interacting with a third-party API. The project also provides a foundation for further development. Additional features could be added, such as user authentication, saving favorite tracks, creating playlists, and more. The user interface could also be enhanced for a more interactive and user-friendly experience.
+
+# Functionality
+The application allows users to search for music tracks. When a user enters a track name, the application communicates with the Spotify API to fetch information about the track. The information retrieved includes the track name, the artist's name, and a link to listen to the track on Spotify.
 
 - cmd/web/: This is where the application is initialized and the server is started. The main.go file will reside here.
 - pkg/handlers/: This package will contain the HTTP handlers that respond to web requests.
