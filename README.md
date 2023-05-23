@@ -5,3 +5,7 @@
 - pkg/spotify/: This package will contain the code to interact with the Spotify API.
 - ui/static/ and ui/templates/: These directories will contain the static files (CSS, JavaScript) and HTML templates for your application.
 - go.mod and go.sum: These files are used by Go's module system.
+
+
+For this, we'll need to install a Go client for the Spotify Web API. One such client is zmb3/spotify. 
+You can install it by running go get github.com/zmb3/spotify in your terminal.
