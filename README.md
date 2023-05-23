@@ -9,3 +9,7 @@
 
 For this, we'll need to install a Go client for the Spotify Web API. One such client is zmb3/spotify. 
 You can install it by running go get github.com/zmb3/spotify in your terminal.
+
+
+
+Deployment: Finally, once the application is ready,  deploy it to a server. Use a cloud service like AWS, Google Cloud, or Heroku.
