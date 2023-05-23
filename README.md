@@ -8,7 +8,7 @@ A basic web application that interacts with the Spotify API.
 - ui/static/ and ui/templates/: These directories will contain the static files (CSS, JavaScript) and HTML templates for your application.
 - go.mod and go.sum: These files are used by Go's module system.
 
-#Set-up
+# Set-up
 Install a Go client for the Spotify Web API. One such client is zmb3/spotify. 
 You can install it by running go get github.com/zmb3/spotify in your terminal.
 
