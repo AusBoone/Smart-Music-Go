@@ -1,9 +1,11 @@
-// This file will contain the code to interact with the Spotify API. 
+// This file will contain the code to interact with the Spotify API.
 
 package spotify
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/zmb3/spotify"
 	"golang.org/x/oauth2/clientcredentials"
 )
@@ -31,7 +33,7 @@ func NewSpotifyClient(clientID string, clientSecret string) SpotifyClient {
 }
 
 // SearchTrack searches for a track on Spotify
-// This function performs a search on Spotify for the given track and returns the first result. 
+// This function performs a search on Spotify for the given track and returns the first result.
 // If no tracks are found, it returns an error.
 func (sc *SpotifyClient) SearchTrack(track string) (spotify.FullTrack, error) {
 	results, err := sc.Client.Search(track, spotify.SearchTypeTrack)
@@ -45,4 +47,3 @@ func (sc *SpotifyClient) SearchTrack(track string) (spotify.FullTrack, error) {
 
 	return spotify.FullTrack{}, fmt.Errorf("no tracks found")
 }
-
