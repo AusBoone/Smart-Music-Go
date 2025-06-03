@@ -1,0 +1,39 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the `go test` coverage tool
+*.out
+*.coverprofile
+
+# Build directories
+/bin/
+/build/
+
+# Dependency directories
+/vendor/
+Godeps/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Module caches
+/pkg/mod/
+/pkg/sumdb/
+
+# General cache directories
+**/cache/
+
+# Object files and archives
+*.o
+*.a
+
+# Env files
+.env
