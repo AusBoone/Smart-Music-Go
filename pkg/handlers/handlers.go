@@ -4,7 +4,11 @@ package handlers
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
+	"os"
+
+	"Smart-Music-Go/pkg/spotify"
 )
 
 // Application struct to hold the methods for routes
@@ -22,16 +26,16 @@ func (app *Application) Home(w http.ResponseWriter, r *http.Request) {
 	`)
 }
 
-/* In this function, we're getting the track query parameter from the request, 
-creating a new Spotify client, searching for the track, and printing the name of the first track found. 
+/* In this function, we're getting the track query parameter from the request,
+creating a new Spotify client, searching for the track, and printing the name of the first track found.
 You'll need to replace "your-client-id" and "your-client-secret" with your actual Spotify application's client ID and secret.
 
 This will display the name of the track, the name of the artist, and a link to listen to the track on Spotify.
 
-This is a very basic implementation and there's a lot more you can do. 
-For example, you could add pagination to display more search results, 
-add more details about the tracks, handle errors more gracefully, 
-add a login system to allow users to save their favorite tracks, and much more. 
+This is a very basic implementation and there's a lot more you can do.
+For example, you could add pagination to display more search results,
+add more details about the tracks, handle errors more gracefully,
+add a login system to allow users to save their favorite tracks, and much more.
 The possibilities are endless! */
 
 // Search is a handler function which will be used to handle search requests.
@@ -39,9 +43,20 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	// Get the query parameter for the track from the URL
 	track := r.URL.Query().Get("track")
 
-	// Create a new Spotify client using the client ID and secret
-	// Replace "your-client-id" and "your-client-secret" with your actual client ID and secret
-	sc := spotify.NewSpotifyClient("your-client-id", "your-client-secret")
+	// Read credentials from environment variables
+	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
+	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
+	if clientID == "" || clientSecret == "" {
+		http.Error(w, "Spotify credentials not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Create a new Spotify client using the credentials
+	sc, err := spotify.NewSpotifyClient(clientID, clientSecret)
+	if err != nil {
+		http.Error(w, "Failed to authenticate with Spotify", http.StatusInternalServerError)
+		return
+	}
 
 	// Use the Spotify client to search for the track
 	// The SearchTrack function returns the first track found and an error

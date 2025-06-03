@@ -3,8 +3,8 @@
 package main
 
 import (
-	"net/http"
 	"Smart-Music-Go/pkg/handlers"
+	"net/http"
 )
 
 func main() {
