@@ -4,7 +4,10 @@ package handlers
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
+
+	"Smart-Music-Go/pkg/spotify"
 )
 
 // Application struct to hold the methods for routes
@@ -22,16 +25,16 @@ func (app *Application) Home(w http.ResponseWriter, r *http.Request) {
 	`)
 }
 
-/* In this function, we're getting the track query parameter from the request, 
-creating a new Spotify client, searching for the track, and printing the name of the first track found. 
+/* In this function, we're getting the track query parameter from the request,
+creating a new Spotify client, searching for the track, and printing the name of the first track found.
 You'll need to replace "your-client-id" and "your-client-secret" with your actual Spotify application's client ID and secret.
 
 This will display the name of the track, the name of the artist, and a link to listen to the track on Spotify.
 
-This is a very basic implementation and there's a lot more you can do. 
-For example, you could add pagination to display more search results, 
-add more details about the tracks, handle errors more gracefully, 
-add a login system to allow users to save their favorite tracks, and much more. 
+This is a very basic implementation and there's a lot more you can do.
+For example, you could add pagination to display more search results,
+add more details about the tracks, handle errors more gracefully,
+add a login system to allow users to save their favorite tracks, and much more.
 The possibilities are endless! */
 
 // Search is a handler function which will be used to handle search requests.
