@@ -10,8 +10,10 @@ import (
 	"Smart-Music-Go/pkg/spotify"
 )
 
-// Application struct to hold the methods for routes
-type Application struct{}
+// Application struct holds dependencies for HTTP handlers.
+type Application struct {
+	Spotify spotify.TrackSearcher
+}
 
 // Home is a simple handler function which writes a response.
 // This will display a form on the home page where users can enter a track name and click on the "Search" button to search for the track.
@@ -42,15 +44,11 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	// Get the query parameter for the track from the URL
 	track := r.URL.Query().Get("track")
 
-	// Create a new Spotify client using the client ID and secret
-	// Replace "your-client-id" and "your-client-secret" with your actual client ID and secret
-	sc := spotify.NewSpotifyClient("your-client-id", "your-client-secret")
-
 	// Use the Spotify client to search for the track
 	// The SearchTrack function returns the first track found and an error
 	// If no tracks are found, the error will be "no tracks found"
 	// If an error occurs during the search, it will be a different error
-	result, err := sc.SearchTrack(track)
+	result, err := app.Spotify.SearchTrack(track)
 	if err != nil {
 		// If the error is "no tracks found", respond with a user-friendly message
 		if err.Error() == "no tracks found" {
