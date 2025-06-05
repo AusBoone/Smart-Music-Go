@@ -11,8 +11,13 @@ import (
 )
 
 // SpotifyClient is a wrapper around the Spotify API client
+type searcher interface {
+	Search(query string, t spotify.SearchType) (*spotify.SearchResult, error)
+}
+
+// SpotifyClient is a wrapper around the Spotify API client
 type SpotifyClient struct {
-	Client spotify.Client
+	client searcher
 }
 
 // TrackSearcher describes the ability to search for tracks.
@@ -35,15 +40,15 @@ func NewSpotifyClient(clientID string, clientSecret string) *SpotifyClient {
 		panic(err)
 	}
 
-	client := spotify.Authenticator{}.NewClient(token)
-	return &SpotifyClient{Client: client}
+	c := spotify.Authenticator{}.NewClient(token)
+	return &SpotifyClient{client: &c}
 }
 
 // SearchTrack searches for a track on Spotify
 // This function performs a search on Spotify for the given track and returns the first result.
 // If no tracks are found, it returns an error.
 func (sc *SpotifyClient) SearchTrack(track string) (spotify.FullTrack, error) {
-	results, err := sc.Client.Search(track, spotify.SearchTypeTrack)
+	results, err := sc.client.Search(track, spotify.SearchTypeTrack)
 	if err != nil {
 		return spotify.FullTrack{}, err
 	}
