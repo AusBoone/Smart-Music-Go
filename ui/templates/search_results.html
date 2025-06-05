@@ -1,4 +1,4 @@
 <h1>Search Results</h1>
 <h2>{{.Name}}</h2>
-<p>By: {{.Artists[0].Name}}</p>
+<p>By: {{(index .Artists 0).Name}}</p>
 <p><a href="{{.ExternalURLs.spotify}}">Listen on Spotify</a></p>
