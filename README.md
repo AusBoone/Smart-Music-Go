@@ -14,8 +14,22 @@ The application allows users to search for music tracks. When a user enters a tr
 - go.mod and go.sum: These files are used by Go's module system.
 
 # Set-up
-Install a Go client for the Spotify Web API. One such client is zmb3/spotify. 
-You can install it by running go get github.com/zmb3/spotify in your terminal.
+Install a Go client for the Spotify Web API. One such client is zmb3/spotify.
+You can install it by running `go get github.com/zmb3/spotify` in your terminal.
+
+### Environment Variables
+The application requires Spotify credentials. Set the following variables before running:
+
+```
+SPOTIFY_CLIENT_ID=your-client-id
+SPOTIFY_CLIENT_SECRET=your-client-secret
+```
+
+You can copy the provided `.env.example` to `.env` and populate your values:
+
+```
+cp .env.example .env
+```
 
 
 # Future Work
