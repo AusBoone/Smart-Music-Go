@@ -1,0 +1,8 @@
+<h1>Your Playlists</h1>
+<ul>
+{{range .Playlists}}
+  <li>{{.Name}}</li>
+{{else}}
+  <li>No playlists found</li>
+{{end}}
+</ul>

@@ -3,16 +3,22 @@
 package handlers
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
+
+	libspotify "github.com/zmb3/spotify"
+	"golang.org/x/oauth2"
 
 	"Smart-Music-Go/pkg/spotify"
 )
 
 // Application struct holds dependencies for HTTP handlers.
 type Application struct {
-	Spotify spotify.TrackSearcher
+	Spotify       spotify.TrackSearcher
+	Authenticator libspotify.Authenticator
 }
 
 // Home is a simple handler function which writes a response.
@@ -44,11 +50,22 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	// Get the query parameter for the track from the URL
 	track := r.URL.Query().Get("track")
 
-	// Use the Spotify client to search for the track
+	// Try to use an authenticated client if a token cookie is present
+	result, err := app.Spotify.SearchTrack(track)
+	if c, errCookie := r.Cookie("spotify_token"); errCookie == nil {
+		if t, errTok := decodeToken(c.Value); errTok == nil {
+			client := app.Authenticator.NewClient(t)
+			sr, errSearch := client.Search(track, libspotify.SearchTypeTrack)
+			if errSearch == nil && sr.Tracks != nil && len(sr.Tracks.Tracks) > 0 {
+				result = sr.Tracks.Tracks[0]
+				err = nil
+			}
+		}
+	}
+
 	// The SearchTrack function returns the first track found and an error
 	// If no tracks are found, the error will be "no tracks found"
 	// If an error occurs during the search, it will be a different error
-	result, err := app.Spotify.SearchTrack(track)
 	if err != nil {
 		// If the error is "no tracks found", respond with a user-friendly message
 		if err.Error() == "no tracks found" {
@@ -81,5 +98,72 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "An error occurred while rendering the template", http.StatusInternalServerError)
 		// Stop processing the request
 		return
+	}
+}
+
+// decodeToken decodes a base64 encoded oauth2 token stored in a cookie
+func decodeToken(v string) (*oauth2.Token, error) {
+	data, err := base64.StdEncoding.DecodeString(v)
+	if err != nil {
+		return nil, err
+	}
+	var t oauth2.Token
+	if err := json.Unmarshal(data, &t); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// Login redirects the user to Spotify's OAuth authorization page
+func (app *Application) Login(w http.ResponseWriter, r *http.Request) {
+	state := "state"
+	http.Redirect(w, r, app.Authenticator.AuthURL(state), http.StatusFound)
+}
+
+// OAuthCallback handles the redirect from Spotify and stores the token in a secure cookie
+func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
+	state := "state"
+	token, err := app.Authenticator.Token(state, r)
+	if err != nil {
+		http.Error(w, "authentication failed", http.StatusInternalServerError)
+		return
+	}
+	b, _ := json.Marshal(token)
+	cookie := &http.Cookie{
+		Name:     "spotify_token",
+		Value:    base64.StdEncoding.EncodeToString(b),
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+	}
+	http.SetCookie(w, cookie)
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// Playlists displays the current user's playlists using an authenticated token
+func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("spotify_token")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	token, err := decodeToken(c.Value)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusBadRequest)
+		return
+	}
+	client := app.Authenticator.NewClient(token)
+	playlists, err := client.CurrentUsersPlaylists()
+	if err != nil {
+		http.Error(w, "failed to fetch playlists", http.StatusInternalServerError)
+		return
+	}
+	tmpl, err := template.ParseFiles("ui/templates/playlists.html")
+	if err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+		return
+	}
+	if err := tmpl.Execute(w, playlists); err != nil {
+		http.Error(w, "render error", http.StatusInternalServerError)
 	}
 }

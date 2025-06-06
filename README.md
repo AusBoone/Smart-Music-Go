@@ -31,6 +31,19 @@ You can copy the provided `.env.example` to `.env` and populate your values:
 cp .env.example .env
 ```
 
+### Redirect URI
+Add `http://localhost:4000/callback` as an allowed redirect URI in your Spotify
+developer dashboard and ensure `SPOTIFY_REDIRECT_URL` matches this value.
+
+For local development run:
+
+```
+go run cmd/web/main.go
+```
+
+Navigate to `http://localhost:4000/login` in your browser to authorize the
+application and then access `/playlists`.
+
 
 # Future Work
 - Frontend Development: The user interface is currently very basic. You might want to use a frontend framework like React, Vue, or Angular to create a more interactive and user-friendly UI. This could include things like a more advanced search form, a list of search results with album art and other details, and maybe even an audio player to preview tracks.
