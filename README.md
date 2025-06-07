@@ -13,9 +13,13 @@ The application allows users to search for music tracks. When a user enters a tr
 - ui/static/ and ui/templates/: These directories will contain the static files (CSS, JavaScript) and HTML templates for your application.
 - go.mod and go.sum: These files are used by Go's module system.
 
-# Set-up
-Install a Go client for the Spotify Web API. One such client is zmb3/spotify.
-You can install it by running `go get github.com/zmb3/spotify` in your terminal.
+# Getting Started
+This section walks through setting up the application for local development.
+
+## Prerequisites
+- Go 1.23 or later
+- go install github.com/zmb3/spotify@latest
+
 
 ### Environment Variables
 The application requires Spotify credentials. Set the following variables before running:
@@ -35,14 +39,31 @@ cp .env.example .env
 Add `http://localhost:4000/callback` as an allowed redirect URI in your Spotify
 developer dashboard and ensure `SPOTIFY_REDIRECT_URL` matches this value.
 
-For local development run:
+### Running the Server
 
-```
+```bash
 go run cmd/web/main.go
 ```
 
-Navigate to `http://localhost:4000/login` in your browser to authorize the
-application and then access `/playlists`.
+### Viewing Results
+Visit `http://localhost:4000/login` to authorize with Spotify. After authorization, open `http://localhost:4000/playlists` or perform a search.
+
+### Docker
+A `Dockerfile` is included for local development. Build and run the container with:
+
+```bash
+docker build -t smart-music-go .
+docker run --env-file .env -p 4000:4000 smart-music-go
+```
+
+### Deployment
+Push the Docker image to your registry and run it on your preferred platform:
+
+```bash
+docker tag smart-music-go <registry>/smart-music-go
+docker push <registry>/smart-music-go
+```
+
 
 
 # Future Work
