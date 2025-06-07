@@ -114,8 +114,17 @@ AWS Secrets Manager or Heroku config vars). When running via Docker Compose or
 Terraform, the variables from `.env` can be supplied via `env_file` or the
 Terraform variables.
 
+
 For SSL, terminate TLS at your load balancer or reverse proxy using a certificate
 from Let's Encrypt or your cloud provider's certificate manager.
+
+## Documentation
+Detailed guides for running the application, deploying to production and
+contributing can be found in the [docs](docs) directory:
+
+- [Usage](docs/usage.md) – running locally and configuring authentication
+- [Deployment](docs/deployment.md) – production deployment options
+- [Contributing](CONTRIBUTING.md)
 
 
 
