@@ -9,6 +9,7 @@ import (
 
 	libspotify "github.com/zmb3/spotify"
 
+	"Smart-Music-Go/pkg/db"
 	"Smart-Music-Go/pkg/handlers"
 	"Smart-Music-Go/pkg/spotify"
 )
@@ -32,7 +33,17 @@ func main() {
 	sc := spotify.NewSpotifyClient(clientID, clientSecret)
 	auth := libspotify.NewAuthenticator(redirectURL, libspotify.ScopePlaylistReadPrivate)
 	auth.SetAuthInfo(clientID, clientSecret)
-	app := &handlers.Application{Spotify: sc, Authenticator: auth}
+	dbPath := os.Getenv("DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "smartmusic.db"
+	}
+	database, err := db.New(dbPath)
+	if err != nil {
+		log.Fatalf("db init: %v", err)
+	}
+	defer database.Close()
+
+	app := &handlers.Application{Spotify: sc, Authenticator: auth, DB: database}
 
 	// Register the two URL patterns and their corresponding handler functions to the router
 	mux.HandleFunc("/", app.Home)
@@ -40,6 +51,13 @@ func main() {
 	mux.HandleFunc("/login", app.Login)
 	mux.HandleFunc("/callback", app.OAuthCallback)
 	mux.HandleFunc("/playlists", app.Playlists)
+	mux.HandleFunc("/favorites", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			app.AddFavorite(w, r)
+		} else {
+			app.Favorites(w, r)
+		}
+	})
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./ui/static"))))
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir("./ui/frontend/dist"))))
 

@@ -29,6 +29,13 @@ SPOTIFY_CLIENT_ID=your-client-id
 SPOTIFY_CLIENT_SECRET=your-client-secret
 ```
 
+Set `DATABASE_PATH` to the SQLite file (defaults to `smartmusic.db`):
+
+```
+DATABASE_PATH=smartmusic.db
+```
+The database schema is created automatically on startup, so no manual migrations are required.
+
 You can copy the provided `.env.example` to `.env` and populate your values:
 
 ```
@@ -47,6 +54,9 @@ go run cmd/web/main.go
 
 ### Viewing Results
 Visit `http://localhost:4000/login` to authorize with Spotify. After authorization, open `http://localhost:4000/playlists` or perform a search.
+
+### Favorites
+After logging in you can mark tracks as favorites from the search results. View them at `/favorites` or from the React "Favorites" tab.
 
 ### Frontend Setup
 

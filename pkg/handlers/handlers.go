@@ -12,6 +12,7 @@ import (
 	libspotify "github.com/zmb3/spotify"
 	"golang.org/x/oauth2"
 
+	"Smart-Music-Go/pkg/db"
 	"Smart-Music-Go/pkg/spotify"
 )
 
@@ -19,6 +20,7 @@ import (
 type Application struct {
 	Spotify       spotify.TrackSearcher
 	Authenticator libspotify.Authenticator
+	DB            *db.DB
 }
 
 // Home is a simple handler function which writes a response.
@@ -131,6 +133,11 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication failed", http.StatusInternalServerError)
 		return
 	}
+	client := app.Authenticator.NewClient(token)
+	user, err := client.CurrentUser()
+	if err == nil && app.DB != nil {
+		app.DB.SaveToken(user.ID, token)
+	}
 	b, _ := json.Marshal(token)
 	cookie := &http.Cookie{
 		Name:     "spotify_token",
@@ -140,6 +147,9 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 		Secure:   r.TLS != nil,
 	}
 	http.SetCookie(w, cookie)
+	if user != nil {
+		http.SetCookie(w, &http.Cookie{Name: "spotify_user_id", Value: user.ID, Path: "/"})
+	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -169,4 +179,55 @@ func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
 	if err := tmpl.Execute(w, playlists); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
+}
+
+// AddFavorite saves a track to the user's favorites.
+func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		TrackID    string `json:"track_id"`
+		TrackName  string `json:"track_name"`
+		ArtistName string `json:"artist_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	if err := app.DB.AddFavorite(userCookie.Value, req.TrackID, req.TrackName, req.ArtistName); err != nil {
+		http.Error(w, "failed to save favorite", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+// Favorites displays the user's saved favorite tracks.
+func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	favs, err := app.DB.ListFavorites(userCookie.Value)
+	if err != nil {
+		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
+		return
+	}
+	tmpl, err := template.ParseFiles("ui/templates/favorites.html")
+	if err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, favs)
 }

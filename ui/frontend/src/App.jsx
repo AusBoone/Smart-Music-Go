@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Search from './Search.jsx'
 import Playlists from './Playlists.jsx'
+import Favorites from './Favorites.jsx'
 import './App.css'
 
 function App() {
@@ -12,8 +13,9 @@ function App() {
       <nav>
         <button onClick={() => setView('search')}>Search</button>
         <button onClick={() => setView('playlists')}>Playlists</button>
+        <button onClick={() => setView('favorites')}>Favorites</button>
       </nav>
-      {view === 'search' ? <Search /> : <Playlists />}
+      {view === 'search' ? <Search /> : view === 'playlists' ? <Playlists /> : <Favorites />}
     </div>
   )
 }

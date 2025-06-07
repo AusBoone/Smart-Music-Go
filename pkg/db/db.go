@@ -1,0 +1,76 @@
+package db
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+
+	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/oauth2"
+)
+
+// DB wraps a sql.DB connection.
+type DB struct {
+	*sql.DB
+}
+
+// New opens an SQLite database at the given path and creates tables if needed.
+func New(path string) (*DB, error) {
+	d, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return nil, err
+	}
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS tokens (user_id TEXT PRIMARY KEY, token TEXT NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS favorites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, track_id TEXT, track_name TEXT, artist_name TEXT)`,
+	}
+	for _, s := range stmts {
+		if _, err := d.Exec(s); err != nil {
+			d.Close()
+			return nil, fmt.Errorf("init db: %w", err)
+		}
+	}
+	return &DB{d}, nil
+}
+
+// SaveToken stores or updates a user's OAuth token.
+func (db *DB) SaveToken(userID string, token *oauth2.Token) error {
+	b, err := json.Marshal(token)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`INSERT INTO tokens(user_id, token) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET token=excluded.token`, userID, string(b))
+	return err
+}
+
+// AddFavorite stores a favorite track for the given user.
+func (db *DB) AddFavorite(userID, trackID, trackName, artistName string) error {
+	_, err := db.Exec(`INSERT INTO favorites(user_id, track_id, track_name, artist_name) VALUES(?, ?, ?, ?)`, userID, trackID, trackName, artistName)
+	return err
+}
+
+// Favorite represents a saved track.
+type Favorite struct {
+	TrackID    string
+	TrackName  string
+	ArtistName string
+}
+
+// ListFavorites returns all favorites for a user.
+func (db *DB) ListFavorites(userID string) ([]Favorite, error) {
+	rows, err := db.Query(`SELECT track_id, track_name, artist_name FROM favorites WHERE user_id=? ORDER BY id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var fs []Favorite
+	for rows.Next() {
+		var f Favorite
+		if err := rows.Scan(&f.TrackID, &f.TrackName, &f.ArtistName); err != nil {
+			return nil, err
+		}
+		fs = append(fs, f)
+	}
+	return fs, rows.Err()
+}
