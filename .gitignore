@@ -20,6 +20,9 @@
 /vendor/
 Godeps/
 
+# Node projects
+ui/frontend/node_modules/
+
 # Go workspace file
 go.work
 go.work.sum
