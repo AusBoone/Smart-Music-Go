@@ -1,0 +1,8 @@
+<h1>Your Favorites</h1>
+<ul>
+{{range .}}
+  <li>{{.TrackName}} - {{.ArtistName}}</li>
+{{else}}
+  <li>No favorites saved</li>
+{{end}}
+</ul>
