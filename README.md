@@ -48,6 +48,20 @@ go run cmd/web/main.go
 ### Viewing Results
 Visit `http://localhost:4000/login` to authorize with Spotify. After authorization, open `http://localhost:4000/playlists` or perform a search.
 
+### Frontend Setup
+
+The React frontend lives under `ui/frontend` and is served from `/app/`.
+Build the production assets before running the Go server:
+
+```bash
+cd ui/frontend
+npm install
+npm run build
+```
+
+After building, start the server as shown above and visit
+`http://localhost:4000/app/` to use the React interface.
+
 ### Docker
 A `Dockerfile` is included for local development. Build and run the container with:
 
