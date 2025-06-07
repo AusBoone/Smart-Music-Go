@@ -24,13 +24,12 @@ type Application struct {
 // Home is a simple handler function which writes a response.
 // This will display a form on the home page where users can enter a track name and click on the "Search" button to search for the track.
 func (app *Application) Home(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `
-		<h1>Welcome to Smart-Music-Go!</h1>
-		<form action="/search" method="get">
-			<input type="text" name="track" placeholder="Enter a track name">
-			<button type="submit">Search</button>
-		</form>
-	`)
+	tmpl, err := template.ParseFiles("ui/templates/index.html")
+	if err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, nil)
 }
 
 /* In this function, we're getting the track query parameter from the request,
@@ -51,19 +50,19 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	track := r.URL.Query().Get("track")
 
 	// Try to use an authenticated client if a token cookie is present
-	result, err := app.Spotify.SearchTrack(track)
+	results, err := app.Spotify.SearchTrack(track)
 	if c, errCookie := r.Cookie("spotify_token"); errCookie == nil {
 		if t, errTok := decodeToken(c.Value); errTok == nil {
 			client := app.Authenticator.NewClient(t)
 			sr, errSearch := client.Search(track, libspotify.SearchTypeTrack)
 			if errSearch == nil && sr.Tracks != nil && len(sr.Tracks.Tracks) > 0 {
-				result = sr.Tracks.Tracks[0]
+				results = sr.Tracks.Tracks
 				err = nil
 			}
 		}
 	}
 
-	// The SearchTrack function returns the first track found and an error
+	// The SearchTrack function returns the tracks found and an error
 	// If no tracks are found, the error will be "no tracks found"
 	// If an error occurs during the search, it will be a different error
 	if err != nil {
@@ -78,10 +77,10 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse the "search_results.html" template
+	// Parse the index template used for both home and search results
 	// The ParseFiles function returns a *Template and an error
 	// If an error occurs while loading the template, it will be a different error
-	tmpl, err := template.ParseFiles("ui/templates/search_results.html")
+	tmpl, err := template.ParseFiles("ui/templates/index.html")
 	if err != nil {
 		// If an error occurs while loading the template, respond with a generic server error message
 		http.Error(w, "An error occurred while loading the template", http.StatusInternalServerError)
@@ -92,7 +91,11 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	// Render the template with the search results
 	// The Execute function writes the rendered template to the http.ResponseWriter
 	// If an error occurs while rendering the template, it will be a different error
-	err = tmpl.Execute(w, result)
+	data := struct {
+		Results []libspotify.FullTrack
+	}{Results: results}
+
+	err = tmpl.Execute(w, data)
 	if err != nil {
 		// If an error occurs while rendering the template, respond with a generic server error message
 		http.Error(w, "An error occurred while rendering the template", http.StatusInternalServerError)

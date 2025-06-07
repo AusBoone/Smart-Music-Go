@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Smart-Music-Go</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h1>Welcome to Smart-Music-Go!</h1>
+    <form action="/search" method="get">
+        <input type="text" name="track" placeholder="Enter a track name">
+        <button type="submit">Search</button>
+    </form>
+    {{if .Results}}
+    <h2>Search Results</h2>
+    <div class="results">
+        {{range .Results}}
+        <div class="track">
+            {{if gt (len .Album.Images) 0}}
+            <img src="{{(index .Album.Images 0).URL}}" alt="Album art">
+            {{end}}
+            <p class="name">{{.Name}}</p>
+            <p class="artist">{{(index .Artists 0).Name}}</p>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</body>
+</html>

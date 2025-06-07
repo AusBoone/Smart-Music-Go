@@ -30,8 +30,8 @@ func TestSearchTrackFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.Name != "Song" {
-		t.Errorf("expected Song, got %s", got.Name)
+	if len(got) != 1 || got[0].Name != "Song" {
+		t.Errorf("unexpected result: %+v", got)
 	}
 	if fs.lastQuery != "q" || fs.lastType != libspotify.SearchTypeTrack {
 		t.Errorf("Search called with %s %v", fs.lastQuery, fs.lastType)
