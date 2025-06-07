@@ -80,6 +80,13 @@ docker build -t smart-music-go .
 docker run --env-file .env -p 4000:4000 smart-music-go
 ```
 
+You can also run the project via Docker Compose which persists the SQLite
+database to a host volume:
+
+```bash
+docker compose up --build
+```
+
 ### Deployment
 Push the Docker image to your registry and run it on your preferred platform:
 
@@ -87,6 +94,28 @@ Push the Docker image to your registry and run it on your preferred platform:
 docker tag smart-music-go <registry>/smart-music-go
 docker push <registry>/smart-music-go
 ```
+
+Example Terraform configuration for deploying to AWS Fargate is provided under
+`deploy/aws`. It creates an ECS service behind an Application Load Balancer with
+HTTPS termination. After pushing your image, update the variables in
+`terraform.tfvars` and run:
+
+```bash
+cd deploy/aws
+terraform init
+terraform apply
+```
+
+The load balancer DNS output contains the HTTPS endpoint for the application.
+
+### Production Configuration
+Set environment variables using your platform's secret storage (for example
+AWS Secrets Manager or Heroku config vars). When running via Docker Compose or
+Terraform, the variables from `.env` can be supplied via `env_file` or the
+Terraform variables.
+
+For SSL, terminate TLS at your load balancer or reverse proxy using a certificate
+from Let's Encrypt or your cloud provider's certificate manager.
 
 
 
