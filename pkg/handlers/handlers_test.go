@@ -12,12 +12,12 @@ import (
 )
 
 type fakeSearcher struct {
-	track libspotify.FullTrack
-	err   error
+	tracks []libspotify.FullTrack
+	err    error
 }
 
-func (f fakeSearcher) SearchTrack(track string) (libspotify.FullTrack, error) {
-	return f.track, f.err
+func (f fakeSearcher) SearchTrack(track string) ([]libspotify.FullTrack, error) {
+	return f.tracks, f.err
 }
 
 func TestMain(m *testing.M) {
@@ -51,7 +51,7 @@ func TestSearchFound(t *testing.T) {
 		Artists:      []libspotify.SimpleArtist{{Name: "Artist"}},
 		ExternalURLs: map[string]string{"spotify": "http://example.com"},
 	}}
-	app := &Application{Spotify: fakeSearcher{track: track}}
+	app := &Application{Spotify: fakeSearcher{tracks: []libspotify.FullTrack{track}}}
 
 	req := httptest.NewRequest(http.MethodGet, "/search?track=test", nil)
 	rr := httptest.NewRecorder()

@@ -22,7 +22,7 @@ type SpotifyClient struct {
 
 // TrackSearcher describes the ability to search for tracks.
 type TrackSearcher interface {
-	SearchTrack(track string) (spotify.FullTrack, error)
+	SearchTrack(track string) ([]spotify.FullTrack, error)
 }
 
 var _ TrackSearcher = (*SpotifyClient)(nil)
@@ -44,18 +44,18 @@ func NewSpotifyClient(clientID string, clientSecret string) *SpotifyClient {
 	return &SpotifyClient{client: &c}
 }
 
-// SearchTrack searches for a track on Spotify
-// This function performs a search on Spotify for the given track and returns the first result.
+// SearchTrack searches for a track on Spotify.
+// It performs a search for the given track and returns all results.
 // If no tracks are found, it returns an error.
-func (sc *SpotifyClient) SearchTrack(track string) (spotify.FullTrack, error) {
+func (sc *SpotifyClient) SearchTrack(track string) ([]spotify.FullTrack, error) {
 	results, err := sc.client.Search(track, spotify.SearchTypeTrack)
 	if err != nil {
-		return spotify.FullTrack{}, err
+		return nil, err
 	}
 
 	if results.Tracks != nil && len(results.Tracks.Tracks) > 0 {
-		return results.Tracks.Tracks[0], nil
+		return results.Tracks.Tracks, nil
 	}
 
-	return spotify.FullTrack{}, fmt.Errorf("no tracks found")
+	return nil, fmt.Errorf("no tracks found")
 }
