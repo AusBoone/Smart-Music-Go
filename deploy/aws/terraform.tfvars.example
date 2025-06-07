@@ -1,0 +1,10 @@
+region = "us-east-1"
+vpc_id = "vpc-xxxx"
+subnets = ["subnet-aaaa", "subnet-bbbb"]
+certificate_arn = "arn:aws:acm:region:account:certificate/xxxx"
+execution_role_arn = "arn:aws:iam::account:role/ecsTaskExecutionRole"
+task_role_arn = "arn:aws:iam::account:role/ecsTaskRole"
+image = "<account>.dkr.ecr.<region>.amazonaws.com/smart-music-go:latest"
+spotify_client_id = "your-client-id"
+spotify_client_secret = "your-client-secret"
+spotify_redirect_url = "https://your-domain.com/callback"
