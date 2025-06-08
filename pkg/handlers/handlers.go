@@ -3,6 +3,7 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -121,13 +122,36 @@ func decodeToken(v string) (*oauth2.Token, error) {
 
 // Login redirects the user to Spotify's OAuth authorization page
 func (app *Application) Login(w http.ResponseWriter, r *http.Request) {
-	state := "state"
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		http.Error(w, "failed to generate state", http.StatusInternalServerError)
+		return
+	}
+	state := base64.RawURLEncoding.EncodeToString(b)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oauth_state",
+		Value:    state,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+	})
 	http.Redirect(w, r, app.Authenticator.AuthURL(state), http.StatusFound)
 }
 
 // OAuthCallback handles the redirect from Spotify and stores the token in a secure cookie
 func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
-	state := "state"
+	c, err := r.Cookie("oauth_state")
+	if err != nil {
+		http.Error(w, "state mismatch", http.StatusBadRequest)
+		return
+	}
+	state := c.Value
+	if r.URL.Query().Get("state") != state {
+		http.Error(w, "state mismatch", http.StatusBadRequest)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Path: "/", MaxAge: -1})
+
 	token, err := app.Authenticator.Token(state, r)
 	if err != nil {
 		http.Error(w, "authentication failed", http.StatusInternalServerError)
