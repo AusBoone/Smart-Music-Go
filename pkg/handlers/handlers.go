@@ -111,6 +111,32 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// SearchJSON returns search results in JSON format.
+func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
+	track := r.URL.Query().Get("track")
+	results, err := app.Spotify.SearchTrack(track)
+	if c, errCookie := r.Cookie("spotify_token"); errCookie == nil {
+		if t, errTok := decodeToken(c.Value); errTok == nil {
+			client := app.Authenticator.NewClient(t)
+			sr, errSearch := client.Search(track, libspotify.SearchTypeTrack)
+			if errSearch == nil && sr.Tracks != nil && len(sr.Tracks.Tracks) > 0 {
+				results = sr.Tracks.Tracks
+				err = nil
+			}
+		}
+	}
+	if err != nil {
+		if err.Error() == "no tracks found" {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, "search error", http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
 // decodeToken decodes a base64 encoded oauth2 token stored in a cookie
 func decodeToken(v string) (*oauth2.Token, error) {
 	data, err := base64.StdEncoding.DecodeString(v)
@@ -209,6 +235,28 @@ func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PlaylistsJSON returns the user's playlists as JSON.
+func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("spotify_token")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	token, err := decodeToken(c.Value)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusBadRequest)
+		return
+	}
+	client := app.Authenticator.NewClient(token)
+	playlists, err := client.CurrentUsersPlaylists()
+	if err != nil {
+		http.Error(w, "failed to fetch playlists", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(playlists)
+}
+
 // AddFavorite saves a track to the user's favorites.
 func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 	userCookie, err := r.Cookie("spotify_user_id")
@@ -261,4 +309,24 @@ func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 		log.Printf("favorites template execute: %v", err)
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
+}
+
+// FavoritesJSON returns the user's favorite tracks as JSON.
+func (app *Application) FavoritesJSON(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	favs, err := app.DB.ListFavorites(userCookie.Value)
+	if err != nil {
+		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(favs)
 }
