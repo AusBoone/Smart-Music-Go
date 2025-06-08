@@ -36,14 +36,17 @@ variable "image" {
 variable "spotify_client_id" {
   description = "Spotify client ID"
   type        = string
+  sensitive   = true
 }
 
 variable "spotify_client_secret" {
   description = "Spotify client secret"
   type        = string
+  sensitive   = true
 }
 
 variable "spotify_redirect_url" {
   description = "OAuth redirect URL"
   type        = string
+  sensitive   = true
 }
