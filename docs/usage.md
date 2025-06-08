@@ -3,7 +3,7 @@
 This guide covers running Smart-Music-Go locally and configuring Spotify authentication.
 
 ## Prerequisites
-- Go 1.23 or later
+- Go 1.22 or later
 - `go install github.com/zmb3/spotify@latest`
 - Node.js and npm for building the React frontend
 
