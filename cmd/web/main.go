@@ -30,7 +30,10 @@ func main() {
 	}
 
 	// Initialize a Spotify client and application with dependencies
-	sc := spotify.NewSpotifyClient(clientID, clientSecret)
+	sc, err := spotify.NewSpotifyClient(clientID, clientSecret)
+	if err != nil {
+		log.Fatalf("spotify client init: %v", err)
+	}
 	auth := libspotify.NewAuthenticator(redirectURL, libspotify.ScopePlaylistReadPrivate)
 	auth.SetAuthInfo(clientID, clientSecret)
 	dbPath := os.Getenv("DATABASE_PATH")

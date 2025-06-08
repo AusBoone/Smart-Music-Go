@@ -28,7 +28,7 @@ type TrackSearcher interface {
 var _ TrackSearcher = (*SpotifyClient)(nil)
 
 // NewSpotifyClient creates a new Spotify API client with client credentials
-func NewSpotifyClient(clientID string, clientSecret string) *SpotifyClient {
+func NewSpotifyClient(clientID string, clientSecret string) (*SpotifyClient, error) {
 	config := &clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -37,11 +37,11 @@ func NewSpotifyClient(clientID string, clientSecret string) *SpotifyClient {
 
 	token, err := config.Token(context.Background())
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	c := spotify.Authenticator{}.NewClient(token)
-	return &SpotifyClient{client: &c}
+	return &SpotifyClient{client: &c}, nil
 }
 
 // SearchTrack searches for a track on Spotify.
