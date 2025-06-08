@@ -1,3 +1,4 @@
+// Playlists fetches and displays the current user's Spotify playlists.
 import { useEffect, useState } from 'react'
 
 function Playlists() {
