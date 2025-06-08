@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 
 	libspotify "github.com/zmb3/spotify"
@@ -32,7 +33,10 @@ func (app *Application) Home(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, nil)
+	if err := tmpl.Execute(w, nil); err != nil {
+		log.Printf("home template execute: %v", err)
+		http.Error(w, "render error", http.StatusInternalServerError)
+	}
 }
 
 /* In this function, we're getting the track query parameter from the request,
@@ -253,5 +257,8 @@ func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, favs)
+	if err := tmpl.Execute(w, favs); err != nil {
+		log.Printf("favorites template execute: %v", err)
+		http.Error(w, "render error", http.StatusInternalServerError)
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"Smart-Music-Go/pkg/db"
 	libspotify "github.com/zmb3/spotify"
 )
 
@@ -81,5 +82,60 @@ func TestSearchNotFound(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "No tracks found for 'missing'") {
 		t.Errorf("unexpected response: %s", rr.Body.String())
+	}
+}
+
+// failingWriter returns an error on the first Write call to trigger template failures.
+type failingWriter struct {
+	header http.Header
+	status int
+	wrote  bool
+}
+
+func (w *failingWriter) Header() http.Header {
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+
+func (w *failingWriter) WriteHeader(code int) {
+	w.status = code
+}
+
+func (w *failingWriter) Write(b []byte) (int, error) {
+	if !w.wrote {
+		w.wrote = true
+		return 0, fmt.Errorf("write error")
+	}
+	return len(b), nil
+}
+
+func TestHomeTemplateError(t *testing.T) {
+	app := &Application{}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	fw := &failingWriter{}
+
+	app.Home(fw, req)
+
+	if fw.status != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", fw.status)
+	}
+}
+
+func TestFavoritesTemplateError(t *testing.T) {
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &Application{DB: d}
+	req := httptest.NewRequest(http.MethodGet, "/favorites", nil)
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: "u"})
+	fw := &failingWriter{}
+
+	app.Favorites(fw, req)
+
+	if fw.status != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", fw.status)
 	}
 }
