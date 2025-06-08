@@ -54,6 +54,7 @@ go run cmd/web/main.go
 
 ### Viewing Results
 Visit `http://localhost:4000/login` to authorize with Spotify. After authorization, open `http://localhost:4000/playlists` or perform a search.
+The API endpoints `/api/search`, `/api/playlists` and `/api/favorites` return JSON used by the React interface.
 
 ### Favorites
 After logging in you can mark tracks as favorites from the search results. View them at `/favorites` or from the React "Favorites" tab.

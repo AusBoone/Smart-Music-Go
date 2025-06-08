@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 
 function Playlists() {
-  const [html, setHtml] = useState('')
+  const [playlists, setPlaylists] = useState([])
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch('/playlists')
-      .then((res) => res.text())
-      .then((text) => setHtml(text))
-      .catch(() => setHtml('Failed to load playlists'))
+    fetch('/api/playlists')
+      .then((res) => {
+        if (!res.ok) throw new Error('failed')
+        return res.json()
+      })
+      .then((data) => setPlaylists(data.Playlists || []))
+      .catch(() => setError('Failed to load playlists'))
   }, [])
 
   return (
@@ -16,7 +20,12 @@ function Playlists() {
       <p>
         <a href="/login">Login with Spotify</a>
       </p>
-      <div dangerouslySetInnerHTML={{ __html: html }} />
+      {error && <p>{error}</p>}
+      <ul>
+        {playlists.map((p) => (
+          <li key={p.ID}>{p.Name}</li>
+        ))}
+      </ul>
     </div>
   )
 }

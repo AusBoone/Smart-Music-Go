@@ -51,14 +51,23 @@ func main() {
 	// Register the two URL patterns and their corresponding handler functions to the router
 	mux.HandleFunc("/", app.Home)
 	mux.HandleFunc("/search", app.Search)
+	mux.HandleFunc("/api/search", app.SearchJSON)
 	mux.HandleFunc("/login", app.Login)
 	mux.HandleFunc("/callback", app.OAuthCallback)
 	mux.HandleFunc("/playlists", app.Playlists)
+	mux.HandleFunc("/api/playlists", app.PlaylistsJSON)
 	mux.HandleFunc("/favorites", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			app.AddFavorite(w, r)
 		} else {
 			app.Favorites(w, r)
+		}
+	})
+	mux.HandleFunc("/api/favorites", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			app.AddFavorite(w, r)
+		} else {
+			app.FavoritesJSON(w, r)
 		}
 	})
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./ui/static"))))

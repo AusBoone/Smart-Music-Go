@@ -1,19 +1,30 @@
 import { useEffect, useState } from 'react'
 
 function Favorites() {
-  const [html, setHtml] = useState('')
+  const [favs, setFavs] = useState([])
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch('/favorites')
-      .then((res) => res.text())
-      .then((text) => setHtml(text))
-      .catch(() => setHtml('Failed to load favorites'))
+    fetch('/api/favorites')
+      .then((res) => {
+        if (!res.ok) throw new Error('failed')
+        return res.json()
+      })
+      .then((data) => setFavs(data))
+      .catch(() => setError('Failed to load favorites'))
   }, [])
 
   return (
     <div>
       <h2>Your Favorites</h2>
-      <div dangerouslySetInnerHTML={{ __html: html }} />
+      {error && <p>{error}</p>}
+      <ul>
+        {favs.map((f) => (
+          <li key={f.TrackID}>
+            {f.TrackName} - {f.ArtistName}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
