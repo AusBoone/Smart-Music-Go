@@ -64,6 +64,8 @@ func main() {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./ui/static"))))
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir("./ui/frontend/dist"))))
 
-	// Start the HTTP server
-	http.ListenAndServe(":4000", mux)
+	// Start the HTTP server and log any startup error
+	if err := http.ListenAndServe(":4000", mux); err != nil {
+		log.Fatalf("http server error: %v", err)
+	}
 }
