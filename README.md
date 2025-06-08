@@ -17,7 +17,7 @@ The application allows users to search for music tracks. When a user enters a tr
 This section walks through setting up the application for local development.
 
 ## Prerequisites
-- Go 1.23 or later
+- Go 1.22 or later
 - go install github.com/zmb3/spotify@latest
 
 
