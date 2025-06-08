@@ -1,3 +1,5 @@
+// App is the root component for the React UI. It switches between the
+// search, playlists and favorites views.
 import { useState } from 'react'
 import Search from './Search.jsx'
 import Playlists from './Playlists.jsx'

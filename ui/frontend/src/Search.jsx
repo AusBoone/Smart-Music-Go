@@ -1,3 +1,5 @@
+// Search lets the user query tracks via the server API and mark them as
+// favorites.
 import { useState } from 'react'
 
 function Search() {

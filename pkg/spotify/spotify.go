@@ -10,12 +10,13 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-// SpotifyClient is a wrapper around the Spotify API client
+// searcher defines the subset of the spotify.Client used by this package.
 type searcher interface {
 	Search(query string, t spotify.SearchType) (*spotify.SearchResult, error)
 }
 
-// SpotifyClient is a wrapper around the Spotify API client
+// SpotifyClient wraps the official Spotify client providing higher level
+// helper methods.
 type SpotifyClient struct {
 	client searcher
 }
@@ -27,7 +28,9 @@ type TrackSearcher interface {
 
 var _ TrackSearcher = (*SpotifyClient)(nil)
 
-// NewSpotifyClient creates a new Spotify API client with client credentials
+// NewSpotifyClient authenticates using the client credentials flow and returns
+// a SpotifyClient ready for API calls. clientID and clientSecret are obtained
+// from the Spotify developer dashboard.
 func NewSpotifyClient(clientID string, clientSecret string) (*SpotifyClient, error) {
 	config := &clientcredentials.Config{
 		ClientID:     clientID,
@@ -44,9 +47,9 @@ func NewSpotifyClient(clientID string, clientSecret string) (*SpotifyClient, err
 	return &SpotifyClient{client: &c}, nil
 }
 
-// SearchTrack searches for a track on Spotify.
-// It performs a search for the given track and returns all results.
-// If no tracks are found, it returns an error.
+// SearchTrack queries the Spotify API for the supplied track name and returns
+// all matching tracks.  A "no tracks found" error is returned when the result
+// set is empty.
 func (sc *SpotifyClient) SearchTrack(track string) ([]spotify.FullTrack, error) {
 	results, err := sc.client.Search(track, spotify.SearchTypeTrack)
 	if err != nil {

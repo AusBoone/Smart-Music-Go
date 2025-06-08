@@ -14,6 +14,7 @@ import (
 	"Smart-Music-Go/pkg/spotify"
 )
 
+// main configures application dependencies and starts the HTTP server.
 func main() {
 	// Initialize a new http.ServeMux, which is basically a HTTP request router (or multiplexer)
 	mux := http.NewServeMux()

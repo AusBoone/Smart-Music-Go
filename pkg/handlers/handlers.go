@@ -25,8 +25,8 @@ type Application struct {
 	DB            *db.DB
 }
 
-// Home is a simple handler function which writes a response.
-// This will display a form on the home page where users can enter a track name and click on the "Search" button to search for the track.
+// Home renders the landing page.  It shows the search form where users can
+// enter a track name.
 func (app *Application) Home(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("ui/templates/index.html")
 	if err != nil {
@@ -39,19 +39,9 @@ func (app *Application) Home(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-/* In this function, we're getting the track query parameter from the request,
-creating a new Spotify client, searching for the track, and printing the name of the first track found.
-You'll need to replace "your-client-id" and "your-client-secret" with your actual Spotify application's client ID and secret.
-
-This will display the name of the track, the name of the artist, and a link to listen to the track on Spotify.
-
-This is a very basic implementation and there's a lot more you can do.
-For example, you could add pagination to display more search results,
-add more details about the tracks, handle errors more gracefully,
-add a login system to allow users to save their favorite tracks, and much more.
-The possibilities are endless! */
-
-// Search is a handler function which will be used to handle search requests.
+// Search handles the /search endpoint.  It looks up the "track" query
+// parameter and renders search results.  The ResponseWriter and Request are
+// the standard HTTP interfaces used by net/http.
 func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	// Get the query parameter for the track from the URL
 	track := r.URL.Query().Get("track")
@@ -111,7 +101,8 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SearchJSON returns search results in JSON format.
+// SearchJSON handles the /api/search endpoint and writes search results as
+// JSON.  Parameters mirror those of http.HandlerFunc.
 func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
 	track := r.URL.Query().Get("track")
 	results, err := app.Spotify.SearchTrack(track)
@@ -137,7 +128,8 @@ func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(results)
 }
 
-// decodeToken decodes a base64 encoded oauth2 token stored in a cookie
+// decodeToken converts the cookie stored token back into an oauth2.Token. It
+// expects the cookie value to be base64 encoded JSON.
 func decodeToken(v string) (*oauth2.Token, error) {
 	data, err := base64.StdEncoding.DecodeString(v)
 	if err != nil {
@@ -150,7 +142,8 @@ func decodeToken(v string) (*oauth2.Token, error) {
 	return &t, nil
 }
 
-// Login redirects the user to Spotify's OAuth authorization page
+// Login begins the OAuth flow by redirecting the user to Spotify's
+// authorization page.  The ResponseWriter and Request come from net/http.
 func (app *Application) Login(w http.ResponseWriter, r *http.Request) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -168,7 +161,8 @@ func (app *Application) Login(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, app.Authenticator.AuthURL(state), http.StatusFound)
 }
 
-// OAuthCallback handles the redirect from Spotify and stores the token in a secure cookie
+// OAuthCallback completes the OAuth flow.  It exchanges the authorization code
+// for a token and stores it in secure cookies.
 func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("oauth_state")
 	if err != nil {
@@ -207,7 +201,8 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// Playlists displays the current user's playlists using an authenticated token
+// Playlists renders an HTML page listing the logged-in user's playlists. It
+// requires a valid authentication cookie.
 func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("spotify_token")
 	if err != nil {
@@ -235,7 +230,8 @@ func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PlaylistsJSON returns the user's playlists as JSON.
+// PlaylistsJSON handles /api/playlists and returns the playlists encoded as
+// JSON.
 func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("spotify_token")
 	if err != nil {
@@ -257,7 +253,8 @@ func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(playlists)
 }
 
-// AddFavorite saves a track to the user's favorites.
+// AddFavorite accepts a JSON payload describing a track and stores it in the
+// logged-in user's favorites list.
 func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {
@@ -284,7 +281,8 @@ func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-// Favorites displays the user's saved favorite tracks.
+// Favorites renders an HTML page listing tracks the user has saved as
+// favorites.
 func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {
@@ -311,7 +309,8 @@ func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// FavoritesJSON returns the user's favorite tracks as JSON.
+// FavoritesJSON serves the /api/favorites endpoint and returns the favorites
+// as JSON.
 func (app *Application) FavoritesJSON(w http.ResponseWriter, r *http.Request) {
 	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {

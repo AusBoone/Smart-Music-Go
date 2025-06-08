@@ -9,12 +9,14 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// DB wraps a sql.DB connection.
+// DB wraps a sql.DB connection and exposes helper methods for the
+// application's persistence layer.
 type DB struct {
 	*sql.DB
 }
 
-// New opens an SQLite database at the given path and creates tables if needed.
+// New opens the SQLite database file at path, creates required tables
+// on first run and returns a DB value.
 func New(path string) (*DB, error) {
 	d, err := sql.Open("sqlite3", path)
 	if err != nil {
@@ -33,7 +35,8 @@ func New(path string) (*DB, error) {
 	return &DB{d}, nil
 }
 
-// SaveToken stores or updates a user's OAuth token.
+// SaveToken persists the OAuth token for the given userID.  If a token
+// already exists it is replaced.
 func (db *DB) SaveToken(userID string, token *oauth2.Token) error {
 	b, err := json.Marshal(token)
 	if err != nil {
@@ -43,20 +46,22 @@ func (db *DB) SaveToken(userID string, token *oauth2.Token) error {
 	return err
 }
 
-// AddFavorite stores a favorite track for the given user.
+// AddFavorite inserts a track into the favorites table for userID. The
+// trackID, trackName and artistName parameters correspond to the
+// Spotify track information being saved.
 func (db *DB) AddFavorite(userID, trackID, trackName, artistName string) error {
 	_, err := db.Exec(`INSERT INTO favorites(user_id, track_id, track_name, artist_name) VALUES(?, ?, ?, ?)`, userID, trackID, trackName, artistName)
 	return err
 }
 
-// Favorite represents a saved track.
+// Favorite represents a track saved by a user.
 type Favorite struct {
 	TrackID    string
 	TrackName  string
 	ArtistName string
 }
 
-// ListFavorites returns all favorites for a user.
+// ListFavorites retrieves all favorites stored for the provided userID.
 func (db *DB) ListFavorites(userID string) ([]Favorite, error) {
 	rows, err := db.Query(`SELECT track_id, track_name, artist_name FROM favorites WHERE user_id=? ORDER BY id DESC`, userID)
 	if err != nil {

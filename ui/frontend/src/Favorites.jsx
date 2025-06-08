@@ -1,3 +1,4 @@
+// Favorites shows tracks that the user has previously marked as favorites.
 import { useEffect, useState } from 'react'
 
 function Favorites() {
