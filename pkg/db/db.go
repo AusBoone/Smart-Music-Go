@@ -51,7 +51,8 @@ func (db *DB) SaveToken(userID string, token *oauth2.Token) error {
 }
 
 // GetToken retrieves the OAuth token stored for userID and unmarshals it
-// from JSON.
+// from JSON.  The returned token includes the refresh token if one was
+// originally saved.
 func (db *DB) GetToken(userID string) (*oauth2.Token, error) {
 	var data string
 	if err := db.QueryRow(`SELECT token FROM tokens WHERE user_id=?`, userID).Scan(&data); err != nil {

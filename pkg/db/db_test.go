@@ -35,7 +35,7 @@ func TestSaveAndGetToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	tok := &oauth2.Token{AccessToken: "abc"}
+	tok := &oauth2.Token{AccessToken: "abc", RefreshToken: "refresh"}
 	if err := d.SaveToken("u", tok); err != nil {
 		t.Fatal(err)
 	}
@@ -45,5 +45,8 @@ func TestSaveAndGetToken(t *testing.T) {
 	}
 	if got.AccessToken != tok.AccessToken {
 		t.Fatalf("expected %s got %s", tok.AccessToken, got.AccessToken)
+	}
+	if got.RefreshToken != tok.RefreshToken {
+		t.Fatalf("expected refresh %s got %s", tok.RefreshToken, got.RefreshToken)
 	}
 }
