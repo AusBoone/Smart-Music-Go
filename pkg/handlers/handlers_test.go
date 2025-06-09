@@ -1,16 +1,22 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
+	"unsafe"
 
 	"Smart-Music-Go/pkg/db"
 	libspotify "github.com/zmb3/spotify"
+	"golang.org/x/oauth2"
 )
 
 type fakeSearcher struct {
@@ -172,5 +178,50 @@ func TestPlaylistsJSONAuth(t *testing.T) {
 	app.PlaylistsJSON(rr, req)
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d", rr.Code)
+	}
+}
+
+type rt struct{ data string }
+
+func (r rt) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp := &http.Response{StatusCode: 200, Header: make(http.Header)}
+	resp.Body = io.NopCloser(strings.NewReader(r.data))
+	return resp, nil
+}
+
+func setAuthClient(a *libspotify.Authenticator, c *http.Client) {
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, c)
+	v := reflect.ValueOf(a).Elem().FieldByName("context")
+	reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem().Set(reflect.ValueOf(ctx))
+}
+
+func TestPlaylistsJSONFromDB(t *testing.T) {
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	tok := &oauth2.Token{AccessToken: "abc", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour)}
+	if err := d.SaveToken("u", tok); err != nil {
+		t.Fatal(err)
+	}
+	auth := libspotify.NewAuthenticator("http://example.com/callback")
+	auth.SetAuthInfo("id", "secret")
+	client := &http.Client{Transport: rt{data: `{"items":[{"id":"1","name":"List","tracks":{"total":0}}]}`}}
+	setAuthClient(&auth, client)
+	app := &Application{DB: d, Authenticator: auth}
+	req := httptest.NewRequest(http.MethodGet, "/api/playlists", nil)
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: "u"})
+	rr := httptest.NewRecorder()
+	app.PlaylistsJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+	var p libspotify.SimplePlaylistPage
+	if err := json.NewDecoder(rr.Body).Decode(&p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Playlists) != 1 || p.Playlists[0].Name != "List" {
+		t.Fatalf("unexpected playlists: %+v", p.Playlists)
 	}
 }

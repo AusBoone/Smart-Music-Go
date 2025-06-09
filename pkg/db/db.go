@@ -50,6 +50,20 @@ func (db *DB) SaveToken(userID string, token *oauth2.Token) error {
 	return err
 }
 
+// GetToken retrieves the OAuth token stored for userID and unmarshals it
+// from JSON.
+func (db *DB) GetToken(userID string) (*oauth2.Token, error) {
+	var data string
+	if err := db.QueryRow(`SELECT token FROM tokens WHERE user_id=?`, userID).Scan(&data); err != nil {
+		return nil, err
+	}
+	var tok oauth2.Token
+	if err := json.Unmarshal([]byte(data), &tok); err != nil {
+		return nil, err
+	}
+	return &tok, nil
+}
+
 // AddFavorite inserts a track into the favorites table for userID. The
 // trackID, trackName and artistName parameters correspond to the
 // Spotify track information being saved.
