@@ -24,6 +24,8 @@ type fakeSearcher struct {
 	err    error
 }
 
+var testKey = []byte("test-key")
+
 func (f fakeSearcher) SearchTrack(track string) ([]libspotify.FullTrack, error) {
 	return f.tracks, f.err
 }
@@ -35,7 +37,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestHome(t *testing.T) {
-	app := &Application{}
+	app := &Application{SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 
@@ -59,7 +61,7 @@ func TestSearchFound(t *testing.T) {
 		Artists:      []libspotify.SimpleArtist{{Name: "Artist"}},
 		ExternalURLs: map[string]string{"spotify": "http://example.com"},
 	}}
-	app := &Application{Spotify: fakeSearcher{tracks: []libspotify.FullTrack{track}}}
+	app := &Application{Spotify: fakeSearcher{tracks: []libspotify.FullTrack{track}}, SignKey: testKey}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/search?track=test", nil)
 	rr := httptest.NewRecorder()
@@ -79,7 +81,7 @@ func TestSearchFound(t *testing.T) {
 }
 
 func TestSearchNotFound(t *testing.T) {
-	app := &Application{Spotify: fakeSearcher{err: fmt.Errorf("no tracks found")}}
+	app := &Application{Spotify: fakeSearcher{err: fmt.Errorf("no tracks found")}, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/api/search?track=missing", nil)
 	rr := httptest.NewRecorder()
 
@@ -117,7 +119,7 @@ func (w *failingWriter) Write(b []byte) (int, error) {
 }
 
 func TestHomeTemplateError(t *testing.T) {
-	app := &Application{}
+	app := &Application{SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	fw := &failingWriter{}
 
@@ -133,9 +135,9 @@ func TestFavoritesTemplateError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := &Application{DB: d}
+	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/favorites", nil)
-	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: "u"})
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
 	fw := &failingWriter{}
 
 	app.Favorites(fw, req)
@@ -154,9 +156,9 @@ func TestFavoritesJSON(t *testing.T) {
 	if err := d.AddFavorite("u", "1", "Song", "Artist"); err != nil {
 		t.Fatal(err)
 	}
-	app := &Application{DB: d}
+	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/api/favorites", nil)
-	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: "u"})
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
 	rr := httptest.NewRecorder()
 	app.FavoritesJSON(rr, req)
 	if rr.Code != http.StatusOK {
@@ -172,7 +174,7 @@ func TestFavoritesJSON(t *testing.T) {
 }
 
 func TestPlaylistsJSONAuth(t *testing.T) {
-	app := &Application{}
+	app := &Application{SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/api/playlists", nil)
 	rr := httptest.NewRecorder()
 	app.PlaylistsJSON(rr, req)
@@ -209,9 +211,9 @@ func TestPlaylistsJSONFromDB(t *testing.T) {
 	auth.SetAuthInfo("id", "secret")
 	client := &http.Client{Transport: rt{data: `{"items":[{"id":"1","name":"List","tracks":{"total":0}}]}`}}
 	setAuthClient(&auth, client)
-	app := &Application{DB: d, Authenticator: auth}
+	app := &Application{DB: d, Authenticator: auth, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/api/playlists", nil)
-	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: "u"})
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
 	rr := httptest.NewRecorder()
 	app.PlaylistsJSON(rr, req)
 	if rr.Code != http.StatusOK {
