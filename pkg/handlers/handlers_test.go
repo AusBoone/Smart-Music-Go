@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -197,6 +198,22 @@ func setAuthClient(a *libspotify.Authenticator, c *http.Client) {
 	reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem().Set(reflect.ValueOf(ctx))
 }
 
+type refreshRT struct {
+	t         *testing.T
+	tokenResp string
+	apiResp   string
+}
+
+func (rt refreshRT) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp := &http.Response{StatusCode: 200, Header: make(http.Header)}
+	if strings.Contains(req.URL.Path, "/api/token") {
+		resp.Body = io.NopCloser(strings.NewReader(rt.tokenResp))
+	} else {
+		resp.Body = io.NopCloser(strings.NewReader(rt.apiResp))
+	}
+	return resp, nil
+}
+
 func TestPlaylistsJSONFromDB(t *testing.T) {
 	d, err := db.New(":memory:")
 	if err != nil {
@@ -225,5 +242,84 @@ func TestPlaylistsJSONFromDB(t *testing.T) {
 	}
 	if len(p.Playlists) != 1 || p.Playlists[0].Name != "List" {
 		t.Fatalf("unexpected playlists: %+v", p.Playlists)
+	}
+}
+
+func TestPlaylistsJSONRefresh(t *testing.T) {
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	expired := &oauth2.Token{AccessToken: "old", RefreshToken: "ref", TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour)}
+	if err := d.SaveToken("u", expired); err != nil {
+		t.Fatal(err)
+	}
+	auth := libspotify.NewAuthenticator("http://example.com/callback")
+	auth.SetAuthInfo("id", "secret")
+	tokenJSON := `{"access_token":"new","token_type":"Bearer","expires_in":3600,"refresh_token":"ref"}`
+	client := &http.Client{Transport: refreshRT{tokenResp: tokenJSON, apiResp: `{"items":[]}`}}
+	setAuthClient(&auth, client)
+	app := &Application{DB: d, Authenticator: auth, SignKey: testKey}
+	req := httptest.NewRequest(http.MethodGet, "/api/playlists", nil)
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr := httptest.NewRecorder()
+	app.PlaylistsJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+	tok, err := d.GetToken("u")
+	if err != nil || tok.AccessToken != "new" {
+		t.Fatalf("token not refreshed: %+v %v", tok, err)
+	}
+	var found bool
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == "spotify_token" {
+			found = true
+			if v, ok := verifyValue(c.Value, testKey); ok {
+				t2, err2 := decodeToken(v)
+				if err2 != nil || t2.AccessToken != "new" {
+					t.Errorf("cookie not updated")
+				}
+			} else {
+				t.Errorf("bad signature")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("token cookie not set")
+	}
+}
+
+func TestSearchJSONRefresh(t *testing.T) {
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	expired := &oauth2.Token{AccessToken: "old", RefreshToken: "ref", TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour)}
+	if err := d.SaveToken("u", expired); err != nil {
+		t.Fatal(err)
+	}
+	fs := fakeSearcher{tracks: []libspotify.FullTrack{{SimpleTrack: libspotify.SimpleTrack{Name: "Song"}}}}
+	auth := libspotify.NewAuthenticator("http://example.com/callback")
+	auth.SetAuthInfo("id", "secret")
+	tokenJSON := `{"access_token":"new","token_type":"Bearer","expires_in":3600,"refresh_token":"ref"}`
+	rt := refreshRT{tokenResp: tokenJSON, apiResp: `{"tracks":{"items":[]}}`}
+	client := &http.Client{Transport: rt}
+	setAuthClient(&auth, client)
+	app := &Application{Spotify: fs, DB: d, Authenticator: auth, SignKey: testKey}
+	b, _ := json.Marshal(expired)
+	req := httptest.NewRequest(http.MethodGet, "/api/search?track=song", nil)
+	req.AddCookie(&http.Cookie{Name: "spotify_token", Value: signValue(base64.StdEncoding.EncodeToString(b), testKey)})
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr := httptest.NewRecorder()
+	app.SearchJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d", rr.Code)
+	}
+	tok, _ := d.GetToken("u")
+	if tok.AccessToken != "new" {
+		t.Errorf("token not refreshed in db")
 	}
 }
