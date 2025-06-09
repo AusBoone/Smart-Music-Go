@@ -12,6 +12,9 @@ import (
 	"testing"
 )
 
+// fakeSearcher implements the TrackSearcher interface for tests. It returns
+// pre-defined results and errors so handlers can be tested without hitting the
+// real Spotify API.
 type fakeSearcher struct {
 	tracks []libspotify.FullTrack
 	err    error
@@ -21,11 +24,15 @@ func (f fakeSearcher) SearchTrack(track string) ([]libspotify.FullTrack, error) 
 	return f.tracks, f.err
 }
 
+// TestMain changes the working directory so templates resolve correctly when
+// tests are run from the package directory.
 func TestMain(m *testing.M) {
 	os.Chdir("../..")
 	os.Exit(m.Run())
 }
 
+// newServer creates an HTTP server with all routes registered using in-memory
+// dependencies so the endpoints can be exercised in tests.
 func newServer() *httptest.Server {
 	fs := fakeSearcher{tracks: []libspotify.FullTrack{
 		{SimpleTrack: libspotify.SimpleTrack{Name: "Song", Artists: []libspotify.SimpleArtist{{Name: "Artist"}}, ExternalURLs: map[string]string{"spotify": "http://example.com"}}},
@@ -52,6 +59,8 @@ func newServer() *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
+// TestSearchEndpoint exercises the HTML search handler and checks that the
+// rendered page includes the expected heading.
 func TestSearchEndpoint(t *testing.T) {
 	srv := newServer()
 	defer srv.Close()
@@ -68,6 +77,8 @@ func TestSearchEndpoint(t *testing.T) {
 	}
 }
 
+// TestLoginEndpoint verifies that the login handler redirects the user to the
+// Spotify authorization endpoint.
 func TestLoginEndpoint(t *testing.T) {
 	srv := newServer()
 	defer srv.Close()
@@ -85,6 +96,8 @@ func TestLoginEndpoint(t *testing.T) {
 	}
 }
 
+// TestPlaylistsUnauthenticated ensures the playlists page rejects requests that
+// have not completed the OAuth flow.
 func TestPlaylistsUnauthenticated(t *testing.T) {
 	srv := newServer()
 	defer srv.Close()

@@ -20,6 +20,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// fakeSearcher is a stand-in for the Spotify client used by handlers. It
+// returns predefined tracks and errors to simulate API responses.
 type fakeSearcher struct {
 	tracks []libspotify.FullTrack
 	err    error
@@ -37,6 +39,8 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// TestHome ensures the landing page renders successfully and includes
+// basic elements such as the welcome text and search form.
 func TestHome(t *testing.T) {
 	app := &Application{SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -56,6 +60,8 @@ func TestHome(t *testing.T) {
 	}
 }
 
+// TestSearchFound verifies that a successful track search returns JSON
+// with the expected items.
 func TestSearchFound(t *testing.T) {
 	track := libspotify.FullTrack{SimpleTrack: libspotify.SimpleTrack{
 		Name:         "Song",
@@ -81,6 +87,7 @@ func TestSearchFound(t *testing.T) {
 	}
 }
 
+// TestSearchNotFound checks that the API responds with 404 when no tracks match.
 func TestSearchNotFound(t *testing.T) {
 	app := &Application{Spotify: fakeSearcher{err: fmt.Errorf("no tracks found")}, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/api/search?track=missing", nil)
@@ -119,6 +126,8 @@ func (w *failingWriter) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+// TestHomeTemplateError simulates a template failure and expects a 500
+// response to be returned to the client.
 func TestHomeTemplateError(t *testing.T) {
 	app := &Application{SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -131,6 +140,8 @@ func TestHomeTemplateError(t *testing.T) {
 	}
 }
 
+// TestFavoritesTemplateError verifies that errors rendering the favorites
+// page are reported correctly.
 func TestFavoritesTemplateError(t *testing.T) {
 	d, err := db.New(":memory:")
 	if err != nil {
@@ -148,6 +159,8 @@ func TestFavoritesTemplateError(t *testing.T) {
 	}
 }
 
+// TestFavoritesJSON checks that the JSON API returns the stored favorites for a
+// user.
 func TestFavoritesJSON(t *testing.T) {
 	d, err := db.New(":memory:")
 	if err != nil {
@@ -174,6 +187,8 @@ func TestFavoritesJSON(t *testing.T) {
 	}
 }
 
+// TestPlaylistsJSONAuth verifies that unauthenticated requests to the playlists
+// API are rejected.
 func TestPlaylistsJSONAuth(t *testing.T) {
 	app := &Application{SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/api/playlists", nil)
@@ -214,6 +229,8 @@ func (rt refreshRT) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+// TestPlaylistsJSONFromDB ensures a stored token is used when calling the
+// playlists endpoint and that the returned JSON is decoded correctly.
 func TestPlaylistsJSONFromDB(t *testing.T) {
 	d, err := db.New(":memory:")
 	if err != nil {
@@ -245,6 +262,8 @@ func TestPlaylistsJSONFromDB(t *testing.T) {
 	}
 }
 
+// TestPlaylistsJSONRefresh checks that an expired token is refreshed when
+// calling the playlists API and that the cookie and DB are updated.
 func TestPlaylistsJSONRefresh(t *testing.T) {
 	d, err := db.New(":memory:")
 	if err != nil {
@@ -291,6 +310,8 @@ func TestPlaylistsJSONRefresh(t *testing.T) {
 	}
 }
 
+// TestSearchJSONRefresh performs a search using an expired token and confirms
+// that the refresh flow updates the stored token.
 func TestSearchJSONRefresh(t *testing.T) {
 	d, err := db.New(":memory:")
 	if err != nil {
