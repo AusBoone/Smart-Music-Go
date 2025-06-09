@@ -62,7 +62,8 @@ After logging in you can mark tracks as favorites from the search results. View 
 ### Frontend Setup
 
 The React frontend lives under `ui/frontend` and is served from `/app/`.
-Build the production assets before running the Go server:
+Build the production assets before running the Go server (the Docker image
+builds these automatically):
 
 ```bash
 cd ui/frontend
@@ -74,7 +75,8 @@ After building, start the server as shown above and visit
 `http://localhost:4000/app/` to use the React interface.
 
 ### Docker
-A `Dockerfile` is included for local development. Build and run the container with:
+A `Dockerfile` is included for local development. Building the image also compiles
+the React frontend, so no manual npm build is required. Build and run the container with:
 
 ```bash
 docker build -t smart-music-go .
