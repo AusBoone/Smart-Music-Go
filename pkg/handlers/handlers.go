@@ -229,18 +229,24 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 // Playlists renders an HTML page listing the logged-in user's playlists. It
 // requires a valid authentication cookie.
 func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
-	// Require the user to be authenticated and retrieve their access token
-	// from the cookie.
-	c, err := r.Cookie("spotify_token")
+	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	// Decode the stored OAuth token for API calls.
-	token, err := decodeToken(c.Value)
-	if err != nil {
-		http.Error(w, "invalid token", http.StatusBadRequest)
-		return
+	var token *oauth2.Token
+	if c, err := r.Cookie("spotify_token"); err == nil {
+		if t, errTok := decodeToken(c.Value); errTok == nil && t.Valid() {
+			token = t
+		}
+	}
+	if token == nil && app.DB != nil {
+		if t, errTok := app.DB.GetToken(userCookie.Value); errTok == nil {
+			token = t
+		} else {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
 	}
 	// Use the authenticated client to fetch the user's playlists.
 	client := app.Authenticator.NewClient(token)
@@ -264,17 +270,24 @@ func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
 // PlaylistsJSON handles /api/playlists and returns the playlists encoded as
 // JSON.
 func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
-	// Authenticate the request using the token cookie and fetch the
-	// playlists via the API, returning the result as JSON.
-	c, err := r.Cookie("spotify_token")
+	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	token, err := decodeToken(c.Value)
-	if err != nil {
-		http.Error(w, "invalid token", http.StatusBadRequest)
-		return
+	var token *oauth2.Token
+	if c, err := r.Cookie("spotify_token"); err == nil {
+		if t, errTok := decodeToken(c.Value); errTok == nil && t.Valid() {
+			token = t
+		}
+	}
+	if token == nil && app.DB != nil {
+		if t, errTok := app.DB.GetToken(userCookie.Value); errTok == nil {
+			token = t
+		} else {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
 	}
 	client := app.Authenticator.NewClient(token)
 	playlists, err := client.CurrentUsersPlaylists()
