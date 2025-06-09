@@ -29,6 +29,10 @@ func main() {
 	if redirectURL == "" {
 		redirectURL = "http://localhost:4000/callback"
 	}
+	signingKey := os.Getenv("SIGNING_KEY")
+	if signingKey == "" {
+		log.Fatal("SIGNING_KEY must be set")
+	}
 	// Validate that we have credentials. Without them the application is
 	// unable to talk to Spotify so we exit early.
 	if clientID == "" || clientSecret == "" {
@@ -59,7 +63,7 @@ func main() {
 
 	// Create the application struct which bundles the dependencies used by
 	// our HTTP handlers.
-	app := &handlers.Application{Spotify: sc, Authenticator: auth, DB: database}
+	app := &handlers.Application{Spotify: sc, Authenticator: auth, DB: database, SignKey: []byte(signingKey)}
 
 	// Register the application routes. Static assets are served from the
 	// ui directory and all API endpoints are implemented in handlers.

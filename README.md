@@ -27,7 +27,10 @@ The application requires Spotify credentials. Set the following variables before
 ```
 SPOTIFY_CLIENT_ID=your-client-id
 SPOTIFY_CLIENT_SECRET=your-client-secret
+SIGNING_KEY=some-random-string
 ```
+
+`SIGNING_KEY` is used to sign cookies so tampering attempts are detected.
 
 Set `DATABASE_PATH` to the SQLite file (defaults to `smartmusic.db`):
 

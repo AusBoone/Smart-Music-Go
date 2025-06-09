@@ -3,13 +3,16 @@
 package handlers
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 
 	libspotify "github.com/zmb3/spotify"
 	"golang.org/x/oauth2"
@@ -23,6 +26,35 @@ type Application struct {
 	Spotify       spotify.TrackSearcher
 	Authenticator libspotify.Authenticator
 	DB            *db.DB
+	SignKey       []byte
+}
+
+// signValue computes an HMAC signature of value using key and returns
+// the value with the signature appended as value|base64url(sig).
+func signValue(value string, key []byte) string {
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(value))
+	sig := mac.Sum(nil)
+	return value + "|" + base64.RawURLEncoding.EncodeToString(sig)
+}
+
+// verifyValue validates signed using key and returns the original value.
+func verifyValue(signed string, key []byte) (string, bool) {
+	parts := strings.Split(signed, "|")
+	if len(parts) != 2 {
+		return "", false
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(parts[0]))
+	expected := mac.Sum(nil)
+	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", false
+	}
+	if !hmac.Equal(expected, sig) {
+		return "", false
+	}
+	return parts[0], true
 }
 
 // Home renders the landing page.  It shows the search form where users can
@@ -57,14 +89,16 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	// session.
 	results, err := app.Spotify.SearchTrack(track)
 	if c, errCookie := r.Cookie("spotify_token"); errCookie == nil {
-		// If the user has authenticated, retry the search with their
-		// personal token to return personalized results.
-		if t, errTok := decodeToken(c.Value); errTok == nil {
-			client := app.Authenticator.NewClient(t)
-			sr, errSearch := client.Search(track, libspotify.SearchTypeTrack)
-			if errSearch == nil && sr.Tracks != nil && len(sr.Tracks.Tracks) > 0 {
-				results = sr.Tracks.Tracks
-				err = nil
+		if v, ok := verifyValue(c.Value, app.SignKey); ok {
+			// If the user has authenticated, retry the search with their
+			// personal token to return personalized results.
+			if t, errTok := decodeToken(v); errTok == nil {
+				client := app.Authenticator.NewClient(t)
+				sr, errSearch := client.Search(track, libspotify.SearchTypeTrack)
+				if errSearch == nil && sr.Tracks != nil && len(sr.Tracks.Tracks) > 0 {
+					results = sr.Tracks.Tracks
+					err = nil
+				}
 			}
 		}
 	}
@@ -121,14 +155,16 @@ func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
 	// Start with a search using the application client.
 	results, err := app.Spotify.SearchTrack(track)
 	if c, errCookie := r.Cookie("spotify_token"); errCookie == nil {
-		// If the user is logged in, attempt the search again using
-		// their access token for potentially richer results.
-		if t, errTok := decodeToken(c.Value); errTok == nil {
-			client := app.Authenticator.NewClient(t)
-			sr, errSearch := client.Search(track, libspotify.SearchTypeTrack)
-			if errSearch == nil && sr.Tracks != nil && len(sr.Tracks.Tracks) > 0 {
-				results = sr.Tracks.Tracks
-				err = nil
+		if v, ok := verifyValue(c.Value, app.SignKey); ok {
+			// If the user is logged in, attempt the search again using
+			// their access token for potentially richer results.
+			if t, errTok := decodeToken(v); errTok == nil {
+				client := app.Authenticator.NewClient(t)
+				sr, errSearch := client.Search(track, libspotify.SearchTypeTrack)
+				if errSearch == nil && sr.Tracks != nil && len(sr.Tracks.Tracks) > 0 {
+					results = sr.Tracks.Tracks
+					err = nil
+				}
 			}
 		}
 	}
@@ -173,7 +209,7 @@ func (app *Application) Login(w http.ResponseWriter, r *http.Request) {
 	state := base64.RawURLEncoding.EncodeToString(b)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_state",
-		Value:    state,
+		Value:    signValue(state, app.SignKey),
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
@@ -190,8 +226,8 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "state mismatch", http.StatusBadRequest)
 		return
 	}
-	state := c.Value
-	if r.URL.Query().Get("state") != state {
+	state, ok := verifyValue(c.Value, app.SignKey)
+	if !ok || r.URL.Query().Get("state") != state {
 		http.Error(w, "state mismatch", http.StatusBadRequest)
 		return
 	}
@@ -214,14 +250,14 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	b, _ := json.Marshal(token)
 	cookie := &http.Cookie{
 		Name:     "spotify_token",
-		Value:    base64.StdEncoding.EncodeToString(b),
+		Value:    signValue(base64.StdEncoding.EncodeToString(b), app.SignKey),
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
 	}
 	http.SetCookie(w, cookie)
 	if user != nil {
-		http.SetCookie(w, &http.Cookie{Name: "spotify_user_id", Value: user.ID, Path: "/"})
+		http.SetCookie(w, &http.Cookie{Name: "spotify_user_id", Value: signValue(user.ID, app.SignKey), Path: "/"})
 	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -234,10 +270,18 @@ func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
 	var token *oauth2.Token
 	if c, err := r.Cookie("spotify_token"); err == nil {
-		if t, errTok := decodeToken(c.Value); errTok == nil && t.Valid() {
-			token = t
+		if v, ok := verifyValue(c.Value, app.SignKey); ok {
+			if t, errTok := decodeToken(v); errTok == nil && t.Valid() {
+				token = t
+			}
 		}
 	}
 	if token == nil && app.DB != nil {
@@ -275,10 +319,18 @@ func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
 	var token *oauth2.Token
 	if c, err := r.Cookie("spotify_token"); err == nil {
-		if t, errTok := decodeToken(c.Value); errTok == nil && t.Valid() {
-			token = t
+		if v, ok := verifyValue(c.Value, app.SignKey); ok {
+			if t, errTok := decodeToken(v); errTok == nil && t.Valid() {
+				token = t
+			}
 		}
 	}
 	if token == nil && app.DB != nil {
@@ -339,6 +391,12 @@ func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
 	if app.DB == nil {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
@@ -367,6 +425,12 @@ func (app *Application) FavoritesJSON(w http.ResponseWriter, r *http.Request) {
 	// Authenticate and find the user's favorites, returning them as JSON.
 	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
