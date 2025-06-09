@@ -11,6 +11,7 @@ import (
 )
 
 // searcher defines the subset of the spotify.Client used by this package.
+// It allows the concrete client to be replaced in tests.
 type searcher interface {
 	Search(query string, t spotify.SearchType) (*spotify.SearchResult, error)
 }
@@ -26,6 +27,7 @@ type TrackSearcher interface {
 	SearchTrack(track string) ([]spotify.FullTrack, error)
 }
 
+// Compile-time interface check ensuring SpotifyClient implements TrackSearcher.
 var _ TrackSearcher = (*SpotifyClient)(nil)
 
 // NewSpotifyClient authenticates using the client credentials flow and returns

@@ -7,6 +7,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// TestAddAndListFavorites verifies that favorites can be persisted and
+// subsequently retrieved from the database.
 func TestAddAndListFavorites(t *testing.T) {
 	d, err := New("test.db")
 	if err != nil {
@@ -29,6 +31,8 @@ func TestAddAndListFavorites(t *testing.T) {
 	}
 }
 
+// TestSaveAndGetToken ensures that OAuth tokens are stored and retrieved
+// without modification.
 func TestSaveAndGetToken(t *testing.T) {
 	d, err := New(":memory:")
 	if err != nil {

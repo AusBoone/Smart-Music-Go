@@ -25,6 +25,9 @@ func main() {
 	// provided the server cannot run.
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
+	// SPOTIFY_REDIRECT_URL must match the callback configured in the
+	// Spotify developer dashboard. When unset we fall back to the local
+	// development address.
 	redirectURL := os.Getenv("SPOTIFY_REDIRECT_URL")
 	if redirectURL == "" {
 		redirectURL = "http://localhost:4000/callback"
@@ -50,6 +53,8 @@ func main() {
 	// and redirect URL configured above.
 	auth := libspotify.NewAuthenticator(redirectURL, libspotify.ScopePlaylistReadPrivate)
 	auth.SetAuthInfo(clientID, clientSecret)
+	// DATABASE_PATH allows the SQLite file to be customised. It defaults
+	// to a file named smartmusic.db in the working directory.
 	dbPath := os.Getenv("DATABASE_PATH")
 	if dbPath == "" {
 		dbPath = "smartmusic.db"

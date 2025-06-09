@@ -15,8 +15,10 @@ type DB struct {
 	*sql.DB
 }
 
-// New opens the SQLite database file at path, creates required tables
-// on first run and returns a DB value.
+// New opens the SQLite database located at path. If the file does not
+// exist it is created along with the required schema. The returned DB
+// value wraps the sql.DB connection for use by the rest of the
+// application.
 func New(path string) (*DB, error) {
 	// Open or create the SQLite database file.
 	d, err := sql.Open("sqlite3", path)
@@ -46,6 +48,7 @@ func (db *DB) SaveToken(userID string, token *oauth2.Token) error {
 	if err != nil {
 		return err
 	}
+	// Upsert the token so subsequent logins replace any existing value.
 	_, err = db.Exec(`INSERT INTO tokens(user_id, token) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET token=excluded.token`, userID, string(b))
 	return err
 }
@@ -69,6 +72,9 @@ func (db *DB) GetToken(userID string) (*oauth2.Token, error) {
 // trackID, trackName and artistName parameters correspond to the
 // Spotify track information being saved.
 func (db *DB) AddFavorite(userID, trackID, trackName, artistName string) error {
+	// Insert the favorite using the supplied track metadata. The ID is
+	// auto-incremented so we only store the user association and track
+	// details.
 	_, err := db.Exec(`INSERT INTO favorites(user_id, track_id, track_name, artist_name) VALUES(?, ?, ?, ?)`, userID, trackID, trackName, artistName)
 	return err
 }
@@ -81,6 +87,8 @@ type Favorite struct {
 }
 
 // ListFavorites retrieves all favorites stored for the provided userID.
+// Results are returned in reverse insertion order so the most recently
+// saved tracks appear first.
 func (db *DB) ListFavorites(userID string) ([]Favorite, error) {
 	// Query all favorites for the given user ordered by insertion time.
 	rows, err := db.Query(`SELECT track_id, track_name, artist_name FROM favorites WHERE user_id=? ORDER BY id DESC`, userID)

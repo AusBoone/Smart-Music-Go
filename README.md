@@ -130,6 +130,7 @@ contributing can be found in the [docs](docs) directory:
 
 - [Usage](docs/usage.md) – running locally and configuring authentication
 - [Deployment](docs/deployment.md) – production deployment options
+- [Architecture](docs/architecture.md) – overview of packages and request flow
 - [Contributing](CONTRIBUTING.md)
 
 
