@@ -27,7 +27,9 @@ cd ui/frontend
 npm install
 npm run build
 ```
-The built assets will be served from `/app/` when the Go server runs.
+The built assets will be served from `/app/` when the Go server runs. When using
+Docker or Docker Compose this build step is handled automatically during the
+image build.
 
 ## Running the Server
 Start the application with:
@@ -38,7 +40,9 @@ Visit `http://localhost:4000/login` to authenticate with Spotify then browse pla
 JSON responses are served from `/api/search`, `/api/playlists` and `/api/favorites` for use by the React frontend.
 
 ## Docker
-A `Dockerfile` and `docker-compose.yml` are provided for local development.
+A `Dockerfile` and `docker-compose.yml` are provided for local development. The
+image build automatically compiles the React frontend so no manual npm build is
+needed.
 To build and run directly with Docker:
 ```bash
 docker build -t smart-music-go .
