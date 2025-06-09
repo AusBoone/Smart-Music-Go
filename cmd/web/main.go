@@ -16,40 +16,53 @@ import (
 
 // main configures application dependencies and starts the HTTP server.
 func main() {
-	// Initialize a new http.ServeMux, which is basically a HTTP request router (or multiplexer)
+	// Initialize a new http.ServeMux which will route incoming HTTP
+	// requests to the appropriate handler based on the URL path.
 	mux := http.NewServeMux()
 
-	// Load Spotify credentials from environment variables
+	// Load Spotify credentials from environment variables. These are
+	// required for authenticating with the Spotify API. If they are not
+	// provided the server cannot run.
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
 	redirectURL := os.Getenv("SPOTIFY_REDIRECT_URL")
 	if redirectURL == "" {
 		redirectURL = "http://localhost:4000/callback"
 	}
+	// Validate that we have credentials. Without them the application is
+	// unable to talk to Spotify so we exit early.
 	if clientID == "" || clientSecret == "" {
 		log.Fatal("SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET must be set")
 	}
 
-	// Initialize a Spotify client and application with dependencies
+	// Initialize a Spotify client which will be used for unauthenticated
+	// API requests (searching without a user token).
 	sc, err := spotify.NewSpotifyClient(clientID, clientSecret)
 	if err != nil {
 		log.Fatalf("spotify client init: %v", err)
 	}
+	// The authenticator handles the OAuth flow for user specific
+	// operations (like listing playlists). It needs the client credentials
+	// and redirect URL configured above.
 	auth := libspotify.NewAuthenticator(redirectURL, libspotify.ScopePlaylistReadPrivate)
 	auth.SetAuthInfo(clientID, clientSecret)
 	dbPath := os.Getenv("DATABASE_PATH")
 	if dbPath == "" {
 		dbPath = "smartmusic.db"
 	}
+	// Open the SQLite database which stores user tokens and favorites.
 	database, err := db.New(dbPath)
 	if err != nil {
 		log.Fatalf("db init: %v", err)
 	}
 	defer database.Close()
 
+	// Create the application struct which bundles the dependencies used by
+	// our HTTP handlers.
 	app := &handlers.Application{Spotify: sc, Authenticator: auth, DB: database}
 
-	// Register the two URL patterns and their corresponding handler functions to the router
+	// Register the application routes. Static assets are served from the
+	// ui directory and all API endpoints are implemented in handlers.
 	mux.HandleFunc("/", app.Home)
 	mux.HandleFunc("/search", app.Search)
 	mux.HandleFunc("/api/search", app.SearchJSON)
@@ -74,7 +87,8 @@ func main() {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./ui/static"))))
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir("./ui/frontend/dist"))))
 
-	// Start the HTTP server and log any startup error
+	// Finally start the HTTP server. ListenAndServe blocks and only returns
+	// an error if the server fails to start or encounters a fatal error.
 	if err := http.ListenAndServe(":4000", mux); err != nil {
 		log.Fatalf("http server error: %v", err)
 	}

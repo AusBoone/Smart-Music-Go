@@ -2,10 +2,13 @@
 import { useEffect, useState } from 'react'
 
 function Playlists() {
+  // Array of playlists returned from the API.
   const [playlists, setPlaylists] = useState([])
+  // Holds an error message when loading fails.
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // Fetch the user's playlists on component mount.
     fetch('/api/playlists')
       .then((res) => {
         if (!res.ok) throw new Error('failed')
@@ -23,6 +26,7 @@ function Playlists() {
       </p>
       {error && <p>{error}</p>}
       <ul>
+        {/* Render playlist names in a simple list */}
         {playlists.map((p) => (
           <li key={p.ID}>{p.Name}</li>
         ))}

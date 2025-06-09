@@ -18,6 +18,7 @@ type DB struct {
 // New opens the SQLite database file at path, creates required tables
 // on first run and returns a DB value.
 func New(path string) (*DB, error) {
+	// Open or create the SQLite database file.
 	d, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
@@ -26,6 +27,8 @@ func New(path string) (*DB, error) {
 		`CREATE TABLE IF NOT EXISTS tokens (user_id TEXT PRIMARY KEY, token TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS favorites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, track_id TEXT, track_name TEXT, artist_name TEXT)`,
 	}
+	// Execute the schema creation statements. Errors here likely mean the
+	// database file is not writable.
 	for _, s := range stmts {
 		if _, err := d.Exec(s); err != nil {
 			d.Close()
@@ -38,6 +41,7 @@ func New(path string) (*DB, error) {
 // SaveToken persists the OAuth token for the given userID.  If a token
 // already exists it is replaced.
 func (db *DB) SaveToken(userID string, token *oauth2.Token) error {
+	// Serialize the oauth2 token to JSON before storing it.
 	b, err := json.Marshal(token)
 	if err != nil {
 		return err
@@ -63,6 +67,7 @@ type Favorite struct {
 
 // ListFavorites retrieves all favorites stored for the provided userID.
 func (db *DB) ListFavorites(userID string) ([]Favorite, error) {
+	// Query all favorites for the given user ordered by insertion time.
 	rows, err := db.Query(`SELECT track_id, track_name, artist_name FROM favorites WHERE user_id=? ORDER BY id DESC`, userID)
 	if err != nil {
 		return nil, err
@@ -77,5 +82,6 @@ func (db *DB) ListFavorites(userID string) ([]Favorite, error) {
 		}
 		fs = append(fs, f)
 	}
+	// rows.Err returns the first error encountered while iterating.
 	return fs, rows.Err()
 }

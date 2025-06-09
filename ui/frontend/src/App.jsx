@@ -7,6 +7,7 @@ import Favorites from './Favorites.jsx'
 import './App.css'
 
 function App() {
+  // Track which section of the app is currently visible.
   const [view, setView] = useState('search')
 
   return (
@@ -17,6 +18,7 @@ function App() {
         <button onClick={() => setView('playlists')}>Playlists</button>
         <button onClick={() => setView('favorites')}>Favorites</button>
       </nav>
+      {/* Conditionally render the selected view component */}
       {view === 'search' ? <Search /> : view === 'playlists' ? <Playlists /> : <Favorites />}
     </div>
   )

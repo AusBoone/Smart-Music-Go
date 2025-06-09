@@ -3,15 +3,20 @@
 import { useState } from 'react'
 
 function Search() {
+  // Query string entered by the user.
   const [query, setQuery] = useState('')
+  // Array of tracks returned from the API.
   const [results, setResults] = useState([])
+  // Error message to display if the search fails.
   const [error, setError] = useState('')
 
   const handleSearch = async () => {
+    // Skip searching if the input is empty.
     if (!query) return
     try {
       const res = await fetch(`/api/search?track=${encodeURIComponent(query)}`)
       if (!res.ok) {
+        // Attempt to read an error message from the response.
         const data = await res.json().catch(() => ({}))
         setError(data.error || 'Search failed')
         setResults([])
@@ -27,6 +32,7 @@ function Search() {
   }
 
   const addFav = async (t) => {
+    // Send the selected track to the server to be stored as a favorite.
     await fetch('/favorites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -49,6 +55,7 @@ function Search() {
       <button onClick={handleSearch}>Search</button>
       {error && <p>{error}</p>}
       <div className="results">
+        {/* Render each returned track with basic info and a Favorite button */}
         {results.map((t) => (
           <div className="track" key={t.ID}>
             {t.Album?.Images?.length > 0 && (

@@ -32,6 +32,8 @@ var _ TrackSearcher = (*SpotifyClient)(nil)
 // a SpotifyClient ready for API calls. clientID and clientSecret are obtained
 // from the Spotify developer dashboard.
 func NewSpotifyClient(clientID string, clientSecret string) (*SpotifyClient, error) {
+	// Use the client credentials OAuth2 flow to obtain an application token
+	// which allows searching the Spotify catalog without a user login.
 	config := &clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -43,6 +45,7 @@ func NewSpotifyClient(clientID string, clientSecret string) (*SpotifyClient, err
 		return nil, err
 	}
 
+	// Create the Spotify client from the retrieved token.
 	c := spotify.Authenticator{}.NewClient(token)
 	return &SpotifyClient{client: &c}, nil
 }
@@ -51,6 +54,7 @@ func NewSpotifyClient(clientID string, clientSecret string) (*SpotifyClient, err
 // all matching tracks.  A "no tracks found" error is returned when the result
 // set is empty.
 func (sc *SpotifyClient) SearchTrack(track string) ([]spotify.FullTrack, error) {
+	// Use the wrapped client to search for the track name.
 	results, err := sc.client.Search(track, spotify.SearchTypeTrack)
 	if err != nil {
 		return nil, err
@@ -60,5 +64,6 @@ func (sc *SpotifyClient) SearchTrack(track string) ([]spotify.FullTrack, error) 
 		return results.Tracks.Tracks, nil
 	}
 
+	// Indicate to callers that nothing matched the query.
 	return nil, fmt.Errorf("no tracks found")
 }

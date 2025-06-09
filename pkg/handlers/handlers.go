@@ -28,12 +28,17 @@ type Application struct {
 // Home renders the landing page.  It shows the search form where users can
 // enter a track name.
 func (app *Application) Home(w http.ResponseWriter, r *http.Request) {
+	// Load the HTML template for the home page.
+	// Reload the template to display the search results. In a larger
+	// application you might parse templates once during startup instead.
 	tmpl, err := template.ParseFiles("ui/templates/index.html")
 	if err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return
 	}
 	if err := tmpl.Execute(w, nil); err != nil {
+		// Log the error but return a generic message to the client
+		// so we do not expose internal details.
 		log.Printf("home template execute: %v", err)
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
@@ -43,12 +48,17 @@ func (app *Application) Home(w http.ResponseWriter, r *http.Request) {
 // parameter and renders search results.  The ResponseWriter and Request are
 // the standard HTTP interfaces used by net/http.
 func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
-	// Get the query parameter for the track from the URL
+	// Extract the "track" query parameter from the URL. If it is empty the
+	// user submitted the form without entering a search term.
 	track := r.URL.Query().Get("track")
 
-	// Try to use an authenticated client if a token cookie is present
+	// Perform the search using the application level Spotify client. This
+	// uses the client credentials flow which does not require a user
+	// session.
 	results, err := app.Spotify.SearchTrack(track)
 	if c, errCookie := r.Cookie("spotify_token"); errCookie == nil {
+		// If the user has authenticated, retry the search with their
+		// personal token to return personalized results.
 		if t, errTok := decodeToken(c.Value); errTok == nil {
 			client := app.Authenticator.NewClient(t)
 			sr, errSearch := client.Search(track, libspotify.SearchTypeTrack)
@@ -59,9 +69,9 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// The SearchTrack function returns the tracks found and an error
-	// If no tracks are found, the error will be "no tracks found"
-	// If an error occurs during the search, it will be a different error
+	// The SearchTrack function returns the tracks found and an error. If no
+	// tracks match, the error will be "no tracks found" which we treat
+	// differently from other failures.
 	if err != nil {
 		// If the error is "no tracks found", respond with a user-friendly message
 		if err.Error() == "no tracks found" {
@@ -88,6 +98,8 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	// Render the template with the search results
 	// The Execute function writes the rendered template to the http.ResponseWriter
 	// If an error occurs while rendering the template, it will be a different error
+	// Build the template data structure. Using an anonymous struct keeps
+	// things simple for this small application.
 	data := struct {
 		Results []libspotify.FullTrack
 	}{Results: results}
@@ -104,9 +116,13 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 // SearchJSON handles the /api/search endpoint and writes search results as
 // JSON.  Parameters mirror those of http.HandlerFunc.
 func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
+	// Grab the requested track from the query string.
 	track := r.URL.Query().Get("track")
+	// Start with a search using the application client.
 	results, err := app.Spotify.SearchTrack(track)
 	if c, errCookie := r.Cookie("spotify_token"); errCookie == nil {
+		// If the user is logged in, attempt the search again using
+		// their access token for potentially richer results.
 		if t, errTok := decodeToken(c.Value); errTok == nil {
 			client := app.Authenticator.NewClient(t)
 			sr, errSearch := client.Search(track, libspotify.SearchTypeTrack)
@@ -125,16 +141,20 @@ func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	// Encode the results to JSON for the client.
 	json.NewEncoder(w).Encode(results)
 }
 
 // decodeToken converts the cookie stored token back into an oauth2.Token. It
 // expects the cookie value to be base64 encoded JSON.
 func decodeToken(v string) (*oauth2.Token, error) {
+	// Decode the base64 encoded string stored in the cookie back into the
+	// JSON representation of the token.
 	data, err := base64.StdEncoding.DecodeString(v)
 	if err != nil {
 		return nil, err
 	}
+	// Unmarshal the JSON into the oauth2.Token struct.
 	var t oauth2.Token
 	if err := json.Unmarshal(data, &t); err != nil {
 		return nil, err
@@ -164,6 +184,7 @@ func (app *Application) Login(w http.ResponseWriter, r *http.Request) {
 // OAuthCallback completes the OAuth flow.  It exchanges the authorization code
 // for a token and stores it in secure cookies.
 func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
+	// Retrieve and verify the state cookie to protect against CSRF attacks.
 	c, err := r.Cookie("oauth_state")
 	if err != nil {
 		http.Error(w, "state mismatch", http.StatusBadRequest)
@@ -174,18 +195,22 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "state mismatch", http.StatusBadRequest)
 		return
 	}
+	// Delete the state cookie as it is no longer needed.
 	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Path: "/", MaxAge: -1})
 
+	// Exchange the authorization code for an access token.
 	token, err := app.Authenticator.Token(state, r)
 	if err != nil {
 		http.Error(w, "authentication failed", http.StatusInternalServerError)
 		return
 	}
+	// Look up the current Spotify user so we can persist their token.
 	client := app.Authenticator.NewClient(token)
 	user, err := client.CurrentUser()
 	if err == nil && app.DB != nil {
 		app.DB.SaveToken(user.ID, token)
 	}
+	// Store the token and user ID in cookies for later requests.
 	b, _ := json.Marshal(token)
 	cookie := &http.Cookie{
 		Name:     "spotify_token",
@@ -204,27 +229,33 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 // Playlists renders an HTML page listing the logged-in user's playlists. It
 // requires a valid authentication cookie.
 func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
+	// Require the user to be authenticated and retrieve their access token
+	// from the cookie.
 	c, err := r.Cookie("spotify_token")
 	if err != nil {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
+	// Decode the stored OAuth token for API calls.
 	token, err := decodeToken(c.Value)
 	if err != nil {
 		http.Error(w, "invalid token", http.StatusBadRequest)
 		return
 	}
+	// Use the authenticated client to fetch the user's playlists.
 	client := app.Authenticator.NewClient(token)
 	playlists, err := client.CurrentUsersPlaylists()
 	if err != nil {
 		http.Error(w, "failed to fetch playlists", http.StatusInternalServerError)
 		return
 	}
+	// Load the template that displays the playlists.
 	tmpl, err := template.ParseFiles("ui/templates/playlists.html")
 	if err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return
 	}
+	// Write the rendered HTML to the response writer.
 	if err := tmpl.Execute(w, playlists); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
@@ -233,6 +264,8 @@ func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
 // PlaylistsJSON handles /api/playlists and returns the playlists encoded as
 // JSON.
 func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
+	// Authenticate the request using the token cookie and fetch the
+	// playlists via the API, returning the result as JSON.
 	c, err := r.Cookie("spotify_token")
 	if err != nil {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -256,6 +289,7 @@ func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
 // AddFavorite accepts a JSON payload describing a track and stores it in the
 // logged-in user's favorites list.
 func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
+	// Identify the current user via the ID stored in a cookie.
 	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -266,6 +300,7 @@ func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 		TrackName  string `json:"track_name"`
 		ArtistName string `json:"artist_name"`
 	}
+	// Decode the JSON payload describing the track to favorite.
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
@@ -274,6 +309,7 @@ func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
+	// Store the favorite in the database keyed by the user ID.
 	if err := app.DB.AddFavorite(userCookie.Value, req.TrackID, req.TrackName, req.ArtistName); err != nil {
 		http.Error(w, "failed to save favorite", http.StatusInternalServerError)
 		return
@@ -284,6 +320,7 @@ func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 // Favorites renders an HTML page listing tracks the user has saved as
 // favorites.
 func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
+	// Obtain the user ID from the cookie so we can query their favorites.
 	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -293,11 +330,13 @@ func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
+	// Look up the user's favorites from the database.
 	favs, err := app.DB.ListFavorites(userCookie.Value)
 	if err != nil {
 		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
 		return
 	}
+	// Load the HTML template that displays the favorites.
 	tmpl, err := template.ParseFiles("ui/templates/favorites.html")
 	if err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -312,6 +351,7 @@ func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 // FavoritesJSON serves the /api/favorites endpoint and returns the favorites
 // as JSON.
 func (app *Application) FavoritesJSON(w http.ResponseWriter, r *http.Request) {
+	// Authenticate and find the user's favorites, returning them as JSON.
 	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
