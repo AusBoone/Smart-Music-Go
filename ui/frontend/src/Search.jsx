@@ -2,7 +2,7 @@
 // favorites.
 import { useState } from 'react'
 
-function Search() {
+function Search({ theme }) {
   // Query string entered by the user.
   const [query, setQuery] = useState('')
   // Array of tracks returned from the API.
@@ -45,7 +45,7 @@ function Search() {
   }
 
   return (
-    <div>
+    <div className={theme}>
       <h2>Search Tracks</h2>
       <input
         value={query}
@@ -63,6 +63,13 @@ function Search() {
             )}
             <p className="name">{t.Name}</p>
             <p className="artist">{t.Artists[0]?.Name}</p>
+            {t.PreviewURL && (
+              <audio
+                controls
+                src={t.PreviewURL}
+                className={`preview ${theme}`}
+              />
+            )}
             <button onClick={() => addFav(t)}>Favorite</button>
           </div>
         ))}

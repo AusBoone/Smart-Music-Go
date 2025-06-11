@@ -10,9 +10,14 @@ import "./App.css";
 function App() {
   // Track which section of the app is currently visible.
   const [view, setView] = useState("search");
+  // Light or dark theme for styling.
+  const [theme, setTheme] = useState("light");
+
+  const toggleTheme = () =>
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
 
   return (
-    <div className="App">
+    <div className={`App ${theme}`}>
       <h1>Smart Music Go</h1>
       <nav>
         <button onClick={() => setView("search")}>Search</button>
@@ -21,10 +26,11 @@ function App() {
         </button>
         <button onClick={() => setView("playlists")}>Playlists</button>
         <button onClick={() => setView("favorites")}>Favorites</button>
+        <button onClick={toggleTheme}>Toggle Theme</button>
       </nav>
       {/* Conditionally render the selected view component */}
       {view === "search" ? (
-        <Search />
+        <Search theme={theme} />
       ) : view === "recommendations" ? (
         <Recommendations />
       ) : view === "playlists" ? (
