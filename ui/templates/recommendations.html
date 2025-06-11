@@ -1,0 +1,9 @@
+<!-- Template listing recommended tracks based on a seed track -->
+<h1>Recommendations</h1>
+<ul>
+{{range .}}
+  <li>{{.Name}} - {{(index .Artists 0).Name}}</li>
+{{else}}
+  <li>No recommendations found</li>
+{{end}}
+</ul>

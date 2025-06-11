@@ -75,6 +75,8 @@ func main() {
 	mux.HandleFunc("/", app.Home)
 	mux.HandleFunc("/search", app.Search)
 	mux.HandleFunc("/api/search", app.SearchJSON)
+	mux.HandleFunc("/recommendations", app.Recommendations)
+	mux.HandleFunc("/api/recommendations", app.RecommendationsJSON)
 	mux.HandleFunc("/login", app.Login)
 	mux.HandleFunc("/callback", app.OAuthCallback)
 	mux.HandleFunc("/playlists", app.Playlists)
