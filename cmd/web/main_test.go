@@ -24,6 +24,10 @@ func (f fakeSearcher) SearchTrack(track string) ([]libspotify.FullTrack, error) 
 	return f.tracks, f.err
 }
 
+func (f fakeSearcher) GetRecommendations(seeds libspotify.Seeds) ([]libspotify.FullTrack, error) {
+	return f.tracks, f.err
+}
+
 // TestMain changes the working directory so templates resolve correctly when
 // tests are run from the package directory.
 func TestMain(m *testing.M) {
@@ -44,6 +48,7 @@ func newServer() *httptest.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", app.Home)
 	mux.HandleFunc("/search", app.Search)
+	mux.HandleFunc("/recommendations", app.Recommendations)
 	mux.HandleFunc("/login", app.Login)
 	mux.HandleFunc("/callback", app.OAuthCallback)
 	mux.HandleFunc("/playlists", app.Playlists)

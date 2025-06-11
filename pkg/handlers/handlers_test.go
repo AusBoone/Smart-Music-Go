@@ -33,6 +33,10 @@ func (f fakeSearcher) SearchTrack(track string) ([]libspotify.FullTrack, error) 
 	return f.tracks, f.err
 }
 
+func (f fakeSearcher) GetRecommendations(seeds libspotify.Seeds) ([]libspotify.FullTrack, error) {
+	return f.tracks, f.err
+}
+
 func TestMain(m *testing.M) {
 	// change working directory to project root so template paths resolve
 	os.Chdir("../..")

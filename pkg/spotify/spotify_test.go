@@ -14,6 +14,10 @@ type fakeSearcher struct {
 	err       error
 }
 
+func (f *fakeSearcher) GetRecommendations(seeds libspotify.Seeds, attrs *libspotify.TrackAttributes, opt *libspotify.Options) (*libspotify.Recommendations, error) {
+	return nil, nil
+}
+
 func (f *fakeSearcher) Search(query string, t libspotify.SearchType) (*libspotify.SearchResult, error) {
 	f.lastQuery = query
 	f.lastType = t

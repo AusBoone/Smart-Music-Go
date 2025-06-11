@@ -14,6 +14,7 @@ import (
 // It allows the concrete client to be replaced in tests.
 type searcher interface {
 	Search(query string, t spotify.SearchType) (*spotify.SearchResult, error)
+	GetRecommendations(seeds spotify.Seeds, attrs *spotify.TrackAttributes, opt *spotify.Options) (*spotify.Recommendations, error)
 }
 
 // SpotifyClient wraps the official Spotify client providing higher level
@@ -25,6 +26,7 @@ type SpotifyClient struct {
 // TrackSearcher describes the ability to search for tracks.
 type TrackSearcher interface {
 	SearchTrack(track string) ([]spotify.FullTrack, error)
+	GetRecommendations(seeds spotify.Seeds) ([]spotify.FullTrack, error)
 }
 
 // Compile-time interface check ensuring SpotifyClient implements TrackSearcher.
@@ -68,4 +70,22 @@ func (sc *SpotifyClient) SearchTrack(track string) ([]spotify.FullTrack, error) 
 
 	// Indicate to callers that nothing matched the query.
 	return nil, fmt.Errorf("no tracks found")
+}
+
+// GetRecommendations returns tracks recommended based on the provided seeds.
+// At least one seed must be supplied. If no tracks are returned an error is
+// generated so callers can distinguish the empty case.
+func (sc *SpotifyClient) GetRecommendations(seeds spotify.Seeds) ([]spotify.FullTrack, error) {
+	recs, err := sc.client.GetRecommendations(seeds, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(recs.Tracks) == 0 {
+		return nil, fmt.Errorf("no recommendations found")
+	}
+	tracks := make([]spotify.FullTrack, len(recs.Tracks))
+	for i, t := range recs.Tracks {
+		tracks[i] = spotify.FullTrack{SimpleTrack: t}
+	}
+	return tracks, nil
 }

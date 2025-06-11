@@ -153,6 +153,34 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Recommendations renders an HTML page listing recommended tracks for a
+// provided seed track ID.
+func (app *Application) Recommendations(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("track_id")
+	if id == "" {
+		http.Error(w, "missing track_id", http.StatusBadRequest)
+		return
+	}
+	seeds := libspotify.Seeds{Tracks: []libspotify.ID{libspotify.ID(id)}}
+	tracks, err := app.Spotify.GetRecommendations(seeds)
+	if err != nil {
+		if err.Error() == "no recommendations found" {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, "recommendation error", http.StatusInternalServerError)
+		}
+		return
+	}
+	tmpl, err := template.ParseFiles("ui/templates/recommendations.html")
+	if err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+		return
+	}
+	if err := tmpl.Execute(w, tracks); err != nil {
+		http.Error(w, "render error", http.StatusInternalServerError)
+	}
+}
+
 // SearchJSON handles the /api/search endpoint and writes search results as
 // JSON.  Parameters mirror those of http.HandlerFunc.
 func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
@@ -191,6 +219,27 @@ func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// Encode the results to JSON for the client.
 	json.NewEncoder(w).Encode(results)
+}
+
+// Recommendations handles /api/recommendations and returns track suggestions as JSON.
+func (app *Application) RecommendationsJSON(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("track_id")
+	if id == "" {
+		http.Error(w, "missing track_id", http.StatusBadRequest)
+		return
+	}
+	seeds := libspotify.Seeds{Tracks: []libspotify.ID{libspotify.ID(id)}}
+	tracks, err := app.Spotify.GetRecommendations(seeds)
+	if err != nil {
+		if err.Error() == "no recommendations found" {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, "recommendation error", http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tracks)
 }
 
 // decodeToken converts the cookie stored token back into an oauth2.Token. It
