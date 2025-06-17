@@ -1,4 +1,7 @@
-// This file will initialize our application and start the server.
+// Command web initializes the Smart-Music-Go application and starts the HTTP
+// server. Configuration is provided via environment variables for Spotify API
+// credentials and database location. The server listens on port 4000 and
+// serves both HTML pages and a JSON API.
 
 package main
 
