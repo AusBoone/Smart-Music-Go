@@ -1,3 +1,9 @@
+// Package db provides the persistence layer used by the application. It wraps
+// a SQLite database and exposes helper methods for storing OAuth tokens and
+// user favorites. The package is intentionally small to keep the example
+// simple; callers are expected to open a single DB instance using New and reuse
+// it for all operations.
+
 package db
 
 import (

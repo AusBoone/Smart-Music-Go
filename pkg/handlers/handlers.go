@@ -1,4 +1,13 @@
-// This file will contain the HTTP handlers that respond to web requests.
+// Package handlers implements the HTTP endpoints for the Smart-Music-Go
+// application. Handlers glue the web server to the Spotify client and
+// persistence layer. Each function maps to a specific route and is designed
+// to be used with the standard net/http mux. Templates located under
+// ui/templates are loaded on demand. The functions here assume that template
+// files exist and will return HTTP 500 when they cannot be loaded.
+//
+// The comments throughout this file document the reasoning behind key logic
+// such as token refresh and cookie signing so developers unfamiliar with the
+// project can quickly understand the flow.
 
 package handlers
 
@@ -438,9 +447,17 @@ func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
 // AddFavorite accepts a JSON payload describing a track and stores it in the
 // logged-in user's favorites list.
 func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
-	// Identify the current user via the ID stored in a cookie.
+	// Identify the current user via the signed ID stored in a cookie.
+	// We verify the signature to ensure the value was not tampered with
+	// client-side.
 	userCookie, err := r.Cookie("spotify_user_id")
 	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
@@ -458,7 +475,7 @@ func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	// Store the favorite in the database keyed by the user ID.
+	// Store the favorite in the database keyed by the verified user ID.
 	if err := app.DB.AddFavorite(userCookie.Value, req.TrackID, req.TrackName, req.ArtistName); err != nil {
 		http.Error(w, "failed to save favorite", http.StatusInternalServerError)
 		return

@@ -203,6 +203,30 @@ func TestPlaylistsJSONAuth(t *testing.T) {
 	}
 }
 
+// TestAddFavoriteAuth ensures the AddFavorite endpoint rejects requests with an
+// unsigned or missing user cookie. This prevents clients from spoofing other
+// user IDs.
+func TestAddFavoriteAuth(t *testing.T) {
+	app := &Application{SignKey: testKey}
+
+	// Missing cookie should result in 401.
+	req := httptest.NewRequest(http.MethodPost, "/favorites", strings.NewReader(`{}`))
+	rr := httptest.NewRecorder()
+	app.AddFavorite(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rr.Code)
+	}
+
+	// Tampered cookie should also be rejected.
+	req = httptest.NewRequest(http.MethodPost, "/favorites", strings.NewReader(`{}`))
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: "badvalue"})
+	rr = httptest.NewRecorder()
+	app.AddFavorite(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 for bad cookie, got %d", rr.Code)
+	}
+}
+
 type rt struct{ data string }
 
 func (r rt) RoundTrip(req *http.Request) (*http.Response, error) {

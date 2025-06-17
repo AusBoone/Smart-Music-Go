@@ -1,4 +1,8 @@
-// This file will contain the code to interact with the Spotify API.
+// Package spotify wraps the official Spotify client library providing helper
+// functions used by the web application. It performs authentication using the
+// client credentials flow and exposes a minimal interface required by the
+// handlers package. Errors are returned directly from the underlying client so
+// callers can inspect them if needed.
 
 package spotify
 
