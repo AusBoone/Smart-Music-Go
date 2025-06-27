@@ -12,6 +12,8 @@ import (
 
 	"github.com/zmb3/spotify"
 	"golang.org/x/oauth2/clientcredentials"
+
+	"Smart-Music-Go/pkg/music"
 )
 
 // searcher defines the subset of the spotify.Client used by this package.
@@ -19,6 +21,7 @@ import (
 type searcher interface {
 	Search(query string, t spotify.SearchType) (*spotify.SearchResult, error)
 	GetRecommendations(seeds spotify.Seeds, attrs *spotify.TrackAttributes, opt *spotify.Options) (*spotify.Recommendations, error)
+	GetAudioFeatures(ids ...spotify.ID) ([]*spotify.AudioFeatures, error)
 }
 
 // SpotifyClient wraps the official Spotify client providing higher level
@@ -27,14 +30,9 @@ type SpotifyClient struct {
 	client searcher
 }
 
-// TrackSearcher describes the ability to search for tracks.
-type TrackSearcher interface {
-	SearchTrack(track string) ([]spotify.FullTrack, error)
-	GetRecommendations(seeds spotify.Seeds) ([]spotify.FullTrack, error)
-}
-
-// Compile-time interface check ensuring SpotifyClient implements TrackSearcher.
-var _ TrackSearcher = (*SpotifyClient)(nil)
+// Compile-time interface check ensuring SpotifyClient satisfies the generic
+// music.Service interface used by the rest of the application.
+var _ music.Service = (*SpotifyClient)(nil)
 
 // NewSpotifyClient authenticates using the client credentials flow and returns
 // a SpotifyClient ready for API calls. clientID and clientSecret are obtained
@@ -61,7 +59,9 @@ func NewSpotifyClient(clientID string, clientSecret string) (*SpotifyClient, err
 // SearchTrack queries the Spotify API for the supplied track name and returns
 // all matching tracks.  A "no tracks found" error is returned when the result
 // set is empty.
-func (sc *SpotifyClient) SearchTrack(track string) ([]spotify.FullTrack, error) {
+// SearchTrack implements music.Service by querying the Spotify API for the
+// supplied track name and returning matching items.
+func (sc *SpotifyClient) SearchTrack(track string) ([]music.Track, error) {
 	// Use the wrapped client to search for the track name.
 	results, err := sc.client.Search(track, spotify.SearchTypeTrack)
 	if err != nil {
@@ -69,7 +69,11 @@ func (sc *SpotifyClient) SearchTrack(track string) ([]spotify.FullTrack, error) 
 	}
 
 	if results.Tracks != nil && len(results.Tracks.Tracks) > 0 {
-		return results.Tracks.Tracks, nil
+		tracks := make([]music.Track, len(results.Tracks.Tracks))
+		for i, t := range results.Tracks.Tracks {
+			tracks[i] = t
+		}
+		return tracks, nil
 	}
 
 	// Indicate to callers that nothing matched the query.
@@ -79,7 +83,13 @@ func (sc *SpotifyClient) SearchTrack(track string) ([]spotify.FullTrack, error) 
 // GetRecommendations returns tracks recommended based on the provided seeds.
 // At least one seed must be supplied. If no tracks are returned an error is
 // generated so callers can distinguish the empty case.
-func (sc *SpotifyClient) GetRecommendations(seeds spotify.Seeds) ([]spotify.FullTrack, error) {
+// GetRecommendations implements music.Service to return tracks related to the
+// provided seeds using Spotify's recommendation API.
+func (sc *SpotifyClient) GetRecommendations(seedIDs []string) ([]music.Track, error) {
+	seeds := spotify.Seeds{Tracks: make([]spotify.ID, len(seedIDs))}
+	for i, id := range seedIDs {
+		seeds.Tracks[i] = spotify.ID(id)
+	}
 	recs, err := sc.client.GetRecommendations(seeds, nil, nil)
 	if err != nil {
 		return nil, err
@@ -87,7 +97,43 @@ func (sc *SpotifyClient) GetRecommendations(seeds spotify.Seeds) ([]spotify.Full
 	if len(recs.Tracks) == 0 {
 		return nil, fmt.Errorf("no recommendations found")
 	}
-	tracks := make([]spotify.FullTrack, len(recs.Tracks))
+	tracks := make([]music.Track, len(recs.Tracks))
+	for i, t := range recs.Tracks {
+		tracks[i] = spotify.FullTrack{SimpleTrack: t}
+	}
+	return tracks, nil
+}
+
+// GetAudioFeatures retrieves audio features for the specified track IDs. The
+// returned slice matches the number and order of the supplied IDs.
+func (sc *SpotifyClient) GetAudioFeatures(ids ...string) ([]*spotify.AudioFeatures, error) {
+	spotifyIDs := make([]spotify.ID, len(ids))
+	for i, id := range ids {
+		spotifyIDs[i] = spotify.ID(id)
+	}
+	feats, err := sc.client.GetAudioFeatures(spotifyIDs...)
+	if err != nil {
+		return nil, err
+	}
+	return feats, nil
+}
+
+// GetRecommendationsWithAttrs returns recommendations using additional track
+// attributes such as tempo or energy. Callers can pass nil attrs to use the
+// default behaviour.
+func (sc *SpotifyClient) GetRecommendationsWithAttrs(seedIDs []string, attrs *spotify.TrackAttributes) ([]music.Track, error) {
+	seeds := spotify.Seeds{Tracks: make([]spotify.ID, len(seedIDs))}
+	for i, id := range seedIDs {
+		seeds.Tracks[i] = spotify.ID(id)
+	}
+	recs, err := sc.client.GetRecommendations(seeds, attrs, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(recs.Tracks) == 0 {
+		return nil, fmt.Errorf("no recommendations found")
+	}
+	tracks := make([]music.Track, len(recs.Tracks))
 	for i, t := range recs.Tracks {
 		tracks[i] = spotify.FullTrack{SimpleTrack: t}
 	}

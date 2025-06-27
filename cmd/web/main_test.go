@@ -3,6 +3,7 @@ package main
 import (
 	"Smart-Music-Go/pkg/db"
 	"Smart-Music-Go/pkg/handlers"
+	"Smart-Music-Go/pkg/music"
 	libspotify "github.com/zmb3/spotify"
 	"io"
 	"net/http"
@@ -16,15 +17,15 @@ import (
 // pre-defined results and errors so handlers can be tested without hitting the
 // real Spotify API.
 type fakeSearcher struct {
-	tracks []libspotify.FullTrack
+	tracks []music.Track
 	err    error
 }
 
-func (f fakeSearcher) SearchTrack(track string) ([]libspotify.FullTrack, error) {
+func (f fakeSearcher) SearchTrack(track string) ([]music.Track, error) {
 	return f.tracks, f.err
 }
 
-func (f fakeSearcher) GetRecommendations(seeds libspotify.Seeds) ([]libspotify.FullTrack, error) {
+func (f fakeSearcher) GetRecommendations(seedIDs []string) ([]music.Track, error) {
 	return f.tracks, f.err
 }
 
@@ -38,13 +39,13 @@ func TestMain(m *testing.M) {
 // newServer creates an HTTP server with all routes registered using in-memory
 // dependencies so the endpoints can be exercised in tests.
 func newServer() *httptest.Server {
-	fs := fakeSearcher{tracks: []libspotify.FullTrack{
+	fs := fakeSearcher{tracks: []music.Track{
 		{SimpleTrack: libspotify.SimpleTrack{Name: "Song", Artists: []libspotify.SimpleArtist{{Name: "Artist"}}, ExternalURLs: map[string]string{"spotify": "http://example.com"}}},
 	}}
 	auth := libspotify.NewAuthenticator("http://example.com/callback")
 	auth.SetAuthInfo("id", "secret")
 	database, _ := db.New(":memory:")
-	app := &handlers.Application{Spotify: fs, Authenticator: auth, DB: database}
+	app := &handlers.Application{Music: fs, Authenticator: auth, DB: database}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", app.Home)
 	mux.HandleFunc("/search", app.Search)

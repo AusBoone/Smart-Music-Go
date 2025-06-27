@@ -3,6 +3,7 @@ package db
 import (
 	"os"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -52,5 +53,28 @@ func TestSaveAndGetToken(t *testing.T) {
 	}
 	if got.RefreshToken != tok.RefreshToken {
 		t.Fatalf("expected refresh %s got %s", tok.RefreshToken, got.RefreshToken)
+	}
+}
+
+// TestHistory verifies that listening events can be stored and summarized.
+func TestHistory(t *testing.T) {
+	d, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	now := time.Now()
+	if err := d.AddHistory("u", "1", "Artist", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddHistory("u", "2", "Artist", now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	artists, err := d.TopArtistsSince("u", now.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artists) != 1 || artists[0].Artist != "Artist" || artists[0].Count != 2 {
+		t.Fatalf("unexpected summary: %+v", artists)
 	}
 }

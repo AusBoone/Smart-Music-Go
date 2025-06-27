@@ -14,6 +14,10 @@ type fakeSearcher struct {
 	err       error
 }
 
+func (f *fakeSearcher) GetAudioFeatures(ids ...libspotify.ID) ([]*libspotify.AudioFeatures, error) {
+	return nil, nil
+}
+
 func (f *fakeSearcher) GetRecommendations(seeds libspotify.Seeds, attrs *libspotify.TrackAttributes, opt *libspotify.Options) (*libspotify.Recommendations, error) {
 	return nil, nil
 }

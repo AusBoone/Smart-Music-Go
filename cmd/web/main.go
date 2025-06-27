@@ -14,7 +14,9 @@ import (
 
 	"Smart-Music-Go/pkg/db"
 	"Smart-Music-Go/pkg/handlers"
+	"Smart-Music-Go/pkg/music"
 	"Smart-Music-Go/pkg/spotify"
+	"Smart-Music-Go/pkg/youtube"
 )
 
 // main configures application dependencies and starts the HTTP server.
@@ -46,10 +48,16 @@ func main() {
 	}
 
 	// Initialize a Spotify client which will be used for unauthenticated
-	// API requests (searching without a user token).
+	// API requests (searching without a user token). This client is always
+	// created as it may be needed for login flows even when another music
+	// service is active.
 	sc, err := spotify.NewSpotifyClient(clientID, clientSecret)
 	if err != nil {
 		log.Fatalf("spotify client init: %v", err)
+	}
+	var musicService music.Service = sc
+	if os.Getenv("MUSIC_SERVICE") == "youtube" {
+		musicService = &youtube.Client{Key: os.Getenv("YOUTUBE_API_KEY")}
 	}
 	// The authenticator handles the OAuth flow for user specific
 	// operations (like listing playlists). It needs the client credentials
@@ -71,7 +79,7 @@ func main() {
 
 	// Create the application struct which bundles the dependencies used by
 	// our HTTP handlers.
-	app := &handlers.Application{Spotify: sc, Authenticator: auth, DB: database, SignKey: []byte(signingKey)}
+	app := &handlers.Application{Music: musicService, SpotifyClient: sc, Authenticator: auth, DB: database, SignKey: []byte(signingKey)}
 
 	// Register the application routes. Static assets are served from the
 	// ui directory and all API endpoints are implemented in handlers.
@@ -80,6 +88,7 @@ func main() {
 	mux.HandleFunc("/api/search", app.SearchJSON)
 	mux.HandleFunc("/recommendations", app.Recommendations)
 	mux.HandleFunc("/api/recommendations", app.RecommendationsJSON)
+	mux.HandleFunc("/api/recommendations/mood", app.RecommendationsMood)
 	mux.HandleFunc("/login", app.Login)
 	mux.HandleFunc("/callback", app.OAuthCallback)
 	mux.HandleFunc("/playlists", app.Playlists)
@@ -98,6 +107,8 @@ func main() {
 			app.FavoritesJSON(w, r)
 		}
 	})
+	mux.HandleFunc("/api/history", app.AddHistoryJSON)
+	mux.HandleFunc("/api/insights", app.InsightsJSON)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./ui/static"))))
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir("./ui/frontend/dist"))))
 
