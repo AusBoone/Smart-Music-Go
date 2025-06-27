@@ -21,18 +21,29 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	libspotify "github.com/zmb3/spotify"
 	"golang.org/x/oauth2"
 
 	"Smart-Music-Go/pkg/db"
+	"Smart-Music-Go/pkg/music"
 	"Smart-Music-Go/pkg/spotify"
 )
 
 // Application struct holds dependencies for HTTP handlers.
 type Application struct {
-	Spotify       spotify.TrackSearcher
+	// Music is the active music service implementation used for searching
+	// and recommendations. It abstracts Spotify, YouTube or any future
+	// provider behind a single interface.
+	Music music.Service
+
+	// SpotifyClient is optional and provides access to Spotify specific
+	// features such as audio analysis used for mood-based playlists.
+	SpotifyClient *spotify.SpotifyClient
+
 	Authenticator libspotify.Authenticator
 	DB            *db.DB
 	SignKey       []byte
@@ -93,10 +104,9 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 	// user submitted the form without entering a search term.
 	track := r.URL.Query().Get("track")
 
-	// Perform the search using the application level Spotify client. This
-	// uses the client credentials flow which does not require a user
-	// session.
-	results, err := app.Spotify.SearchTrack(track)
+	// Perform the search using the configured music service. This typically
+	// uses client-credential flow and does not require a user session.
+	results, err := app.Music.SearchTrack(track)
 	var userID string
 	if uc, errCookie := r.Cookie("spotify_user_id"); errCookie == nil {
 		if v, ok := verifyValue(uc.Value, app.SignKey); ok {
@@ -170,8 +180,7 @@ func (app *Application) Recommendations(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "missing track_id", http.StatusBadRequest)
 		return
 	}
-	seeds := libspotify.Seeds{Tracks: []libspotify.ID{libspotify.ID(id)}}
-	tracks, err := app.Spotify.GetRecommendations(seeds)
+	tracks, err := app.Music.GetRecommendations([]string{id})
 	if err != nil {
 		if err.Error() == "no recommendations found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -190,13 +199,53 @@ func (app *Application) Recommendations(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// RecommendationsMood returns recommendations using mood or tempo attributes.
+// The track_id parameter is required while optional min_tempo/max_tempo values
+// narrow the tempo range. This handler only works when a Spotify client is
+// configured.
+func (app *Application) RecommendationsMood(w http.ResponseWriter, r *http.Request) {
+	if app.SpotifyClient == nil {
+		http.Error(w, "spotify service required", http.StatusNotImplemented)
+		return
+	}
+	id := r.URL.Query().Get("track_id")
+	if id == "" {
+		http.Error(w, "missing track_id", http.StatusBadRequest)
+		return
+	}
+	minTempo, _ := strconv.ParseFloat(r.URL.Query().Get("min_tempo"), 64)
+	maxTempo, _ := strconv.ParseFloat(r.URL.Query().Get("max_tempo"), 64)
+	feats, err := app.SpotifyClient.GetAudioFeatures(id)
+	if err != nil || len(feats) == 0 {
+		http.Error(w, "audio feature error", http.StatusInternalServerError)
+		return
+	}
+	if minTempo == 0 && maxTempo == 0 {
+		// Default to +-10 BPM around the seed track tempo
+		minTempo = float64(feats[0].Tempo) - 10
+		maxTempo = float64(feats[0].Tempo) + 10
+	}
+	attrs := libspotify.NewTrackAttributes().MinTempo(minTempo).MaxTempo(maxTempo)
+	tracks, err := app.SpotifyClient.GetRecommendationsWithAttrs([]string{id}, attrs)
+	if err != nil {
+		if err.Error() == "no recommendations found" {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, "recommendation error", http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tracks)
+}
+
 // SearchJSON handles the /api/search endpoint and writes search results as
 // JSON.  Parameters mirror those of http.HandlerFunc.
 func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
 	// Grab the requested track from the query string.
 	track := r.URL.Query().Get("track")
-	// Start with a search using the application client.
-	results, err := app.Spotify.SearchTrack(track)
+	// Start with a search using the active music service.
+	results, err := app.Music.SearchTrack(track)
 	var userID string
 	if uc, errCookie := r.Cookie("spotify_user_id"); errCookie == nil {
 		if v, ok := verifyValue(uc.Value, app.SignKey); ok {
@@ -237,8 +286,7 @@ func (app *Application) RecommendationsJSON(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "missing track_id", http.StatusBadRequest)
 		return
 	}
-	seeds := libspotify.Seeds{Tracks: []libspotify.ID{libspotify.ID(id)}}
-	tracks, err := app.Spotify.GetRecommendations(seeds)
+	tracks, err := app.Music.GetRecommendations([]string{id})
 	if err != nil {
 		if err.Error() == "no recommendations found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -546,4 +594,64 @@ func (app *Application) FavoritesJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(favs)
+}
+
+// AddHistoryJSON records that a track was played. It expects a JSON body with
+// track_id and artist_name fields. The current timestamp is stored.
+func (app *Application) AddHistoryJSON(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	var req struct {
+		TrackID    string `json:"track_id"`
+		ArtistName string `json:"artist_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if err := app.DB.AddHistory(userCookie.Value, req.TrackID, req.ArtistName, time.Now()); err != nil {
+		http.Error(w, "failed to save history", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+// InsightsJSON returns the most played artists for the current week.
+func (app *Application) InsightsJSON(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	since := time.Now().AddDate(0, 0, -7)
+	res, err := app.DB.TopArtistsSince(userCookie.Value, since)
+	if err != nil {
+		http.Error(w, "failed to load insights", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
 }

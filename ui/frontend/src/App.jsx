@@ -5,6 +5,7 @@ import Search from "./Search.jsx";
 import Playlists from "./Playlists.jsx";
 import Favorites from "./Favorites.jsx";
 import Recommendations from "./Recommendations.jsx";
+import Mood from "./Mood.jsx";
 import "./App.css";
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
         <button onClick={() => setView("recommendations")}>
           Recommendations
         </button>
+        <button onClick={() => setView("mood")}>Mood</button>
         <button onClick={() => setView("playlists")}>Playlists</button>
         <button onClick={() => setView("favorites")}>Favorites</button>
         <button onClick={toggleTheme}>Toggle Theme</button>
@@ -33,6 +35,8 @@ function App() {
         <Search theme={theme} />
       ) : view === "recommendations" ? (
         <Recommendations />
+      ) : view === "mood" ? (
+        <Mood />
       ) : view === "playlists" ? (
         <Playlists />
       ) : (

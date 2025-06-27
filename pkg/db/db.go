@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/oauth2"
@@ -34,6 +35,10 @@ func New(path string) (*DB, error) {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS tokens (user_id TEXT PRIMARY KEY, token TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS favorites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, track_id TEXT, track_name TEXT, artist_name TEXT)`,
+		`CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, track_id TEXT, artist_name TEXT, played_at TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS collections (id TEXT PRIMARY KEY, owner TEXT)`,
+		`CREATE TABLE IF NOT EXISTS collection_tracks (collection_id TEXT, track_id TEXT, track_name TEXT, artist_name TEXT)`,
+		`CREATE TABLE IF NOT EXISTS collection_users (collection_id TEXT, user_id TEXT)`,
 	}
 	// Execute the schema creation statements. Errors here likely mean the
 	// database file is not writable.
@@ -113,4 +118,35 @@ func (db *DB) ListFavorites(userID string) ([]Favorite, error) {
 	}
 	// rows.Err returns the first error encountered while iterating.
 	return fs, rows.Err()
+}
+
+// AddHistory inserts a listening event for the given user. playedAt should be
+// the time the track was played and is stored as a timestamp.
+func (db *DB) AddHistory(userID, trackID, artistName string, playedAt time.Time) error {
+	_, err := db.Exec(`INSERT INTO history(user_id, track_id, artist_name, played_at) VALUES(?,?,?,?)`, userID, trackID, artistName, playedAt)
+	return err
+}
+
+// ArtistCount represents how many times an artist was played.
+type ArtistCount struct {
+	Artist string
+	Count  int
+}
+
+// TopArtistsSince returns the most played artists since the provided time.
+func (db *DB) TopArtistsSince(userID string, since time.Time) ([]ArtistCount, error) {
+	rows, err := db.Query(`SELECT artist_name, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY artist_name ORDER BY c DESC`, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []ArtistCount
+	for rows.Next() {
+		var ac ArtistCount
+		if err := rows.Scan(&ac.Artist, &ac.Count); err != nil {
+			return nil, err
+		}
+		res = append(res, ac)
+	}
+	return res, rows.Err()
 }

@@ -39,6 +39,9 @@ DATABASE_PATH=smartmusic.db
 ```
 The database schema is created automatically on startup, so no manual migrations are required.
 
+`MUSIC_SERVICE` selects the backend provider. Set to `spotify` (default) or
+`youtube`. When using the YouTube provider you must also set `YOUTUBE_API_KEY`.
+
 You can copy the provided `.env.example` to `.env` and populate your values:
 
 ```

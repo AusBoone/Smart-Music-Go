@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"Smart-Music-Go/pkg/db"
+	"Smart-Music-Go/pkg/music"
 	libspotify "github.com/zmb3/spotify"
 	"golang.org/x/oauth2"
 )
@@ -23,17 +24,17 @@ import (
 // fakeSearcher is a stand-in for the Spotify client used by handlers. It
 // returns predefined tracks and errors to simulate API responses.
 type fakeSearcher struct {
-	tracks []libspotify.FullTrack
+	tracks []music.Track
 	err    error
 }
 
 var testKey = []byte("test-key")
 
-func (f fakeSearcher) SearchTrack(track string) ([]libspotify.FullTrack, error) {
+func (f fakeSearcher) SearchTrack(track string) ([]music.Track, error) {
 	return f.tracks, f.err
 }
 
-func (f fakeSearcher) GetRecommendations(seeds libspotify.Seeds) ([]libspotify.FullTrack, error) {
+func (f fakeSearcher) GetRecommendations(seedIDs []string) ([]music.Track, error) {
 	return f.tracks, f.err
 }
 
@@ -72,7 +73,7 @@ func TestSearchFound(t *testing.T) {
 		Artists:      []libspotify.SimpleArtist{{Name: "Artist"}},
 		ExternalURLs: map[string]string{"spotify": "http://example.com"},
 	}}
-	app := &Application{Spotify: fakeSearcher{tracks: []libspotify.FullTrack{track}}, SignKey: testKey}
+	app := &Application{Music: fakeSearcher{tracks: []music.Track{track}}, SignKey: testKey}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/search?track=test", nil)
 	rr := httptest.NewRecorder()
@@ -82,7 +83,7 @@ func TestSearchFound(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rr.Code)
 	}
-	var res []libspotify.FullTrack
+	var res []music.Track
 	if err := json.NewDecoder(rr.Body).Decode(&res); err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestSearchFound(t *testing.T) {
 
 // TestSearchNotFound checks that the API responds with 404 when no tracks match.
 func TestSearchNotFound(t *testing.T) {
-	app := &Application{Spotify: fakeSearcher{err: fmt.Errorf("no tracks found")}, SignKey: testKey}
+	app := &Application{Music: fakeSearcher{err: fmt.Errorf("no tracks found")}, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/api/search?track=missing", nil)
 	rr := httptest.NewRecorder()
 
@@ -350,14 +351,14 @@ func TestSearchJSONRefresh(t *testing.T) {
 	if err := d.SaveToken("u", expired); err != nil {
 		t.Fatal(err)
 	}
-	fs := fakeSearcher{tracks: []libspotify.FullTrack{{SimpleTrack: libspotify.SimpleTrack{Name: "Song"}}}}
+	fs := fakeSearcher{tracks: []music.Track{{SimpleTrack: libspotify.SimpleTrack{Name: "Song"}}}}
 	auth := libspotify.NewAuthenticator("http://example.com/callback")
 	auth.SetAuthInfo("id", "secret")
 	tokenJSON := `{"access_token":"new","token_type":"Bearer","expires_in":3600,"refresh_token":"ref"}`
 	rt := refreshRT{tokenResp: tokenJSON, apiResp: `{"tracks":{"items":[]}}`}
 	client := &http.Client{Transport: rt}
 	setAuthClient(&auth, client)
-	app := &Application{Spotify: fs, DB: d, Authenticator: auth, SignKey: testKey}
+	app := &Application{Music: fs, DB: d, Authenticator: auth, SignKey: testKey}
 	b, _ := json.Marshal(expired)
 	req := httptest.NewRequest(http.MethodGet, "/api/search?track=song", nil)
 	req.AddCookie(&http.Cookie{Name: "spotify_token", Value: signValue(base64.StdEncoding.EncodeToString(b), testKey)})
