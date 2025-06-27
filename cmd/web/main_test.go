@@ -4,6 +4,9 @@ import (
 	"Smart-Music-Go/pkg/db"
 	"Smart-Music-Go/pkg/handlers"
 	"Smart-Music-Go/pkg/music"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	libspotify "github.com/zmb3/spotify"
 	"io"
 	"net/http"
@@ -12,6 +15,14 @@ import (
 	"strings"
 	"testing"
 )
+
+var testKey = []byte("test-key")
+
+func sign(value string) string {
+	mac := hmac.New(sha256.New, testKey)
+	mac.Write([]byte(value))
+	return value + "|" + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
 
 // fakeSearcher implements the TrackSearcher interface for tests. It returns
 // pre-defined results and errors so handlers can be tested without hitting the
@@ -45,7 +56,7 @@ func newServer() *httptest.Server {
 	auth := libspotify.NewAuthenticator("http://example.com/callback")
 	auth.SetAuthInfo("id", "secret")
 	database, _ := db.New(":memory:")
-	app := &handlers.Application{Music: fs, Authenticator: auth, DB: database}
+	app := &handlers.Application{Music: fs, Authenticator: auth, DB: database, SignKey: testKey}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", app.Home)
 	mux.HandleFunc("/search", app.Search)

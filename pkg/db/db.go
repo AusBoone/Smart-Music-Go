@@ -150,3 +150,70 @@ func (db *DB) TopArtistsSince(userID string, since time.Time) ([]ArtistCount, er
 	}
 	return res, rows.Err()
 }
+
+// TrackCount represents how many times a specific track was played.
+type TrackCount struct {
+	TrackID string
+	Count   int
+}
+
+// TopTracksSince returns the most played tracks since the given time.
+func (db *DB) TopTracksSince(userID string, since time.Time) ([]TrackCount, error) {
+	rows, err := db.Query(`SELECT track_id, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY track_id ORDER BY c DESC`, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []TrackCount
+	for rows.Next() {
+		var tc TrackCount
+		if err := rows.Scan(&tc.TrackID, &tc.Count); err != nil {
+			return nil, err
+		}
+		res = append(res, tc)
+	}
+	return res, rows.Err()
+}
+
+// CreateCollection inserts a new collaborative playlist owned by the specified user.
+func (db *DB) CreateCollection(owner string) (string, error) {
+	id := fmt.Sprintf("c_%d", time.Now().UnixNano())
+	if _, err := db.Exec(`INSERT INTO collections(id, owner) VALUES(?, ?)`, id, owner); err != nil {
+		return "", err
+	}
+	if _, err := db.Exec(`INSERT INTO collection_users(collection_id, user_id) VALUES(?, ?)`, id, owner); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// AddTrackToCollection saves a track in the specified collection.
+func (db *DB) AddTrackToCollection(colID, trackID, trackName, artistName string) error {
+	_, err := db.Exec(`INSERT INTO collection_tracks(collection_id, track_id, track_name, artist_name) VALUES(?,?,?,?)`, colID, trackID, trackName, artistName)
+	return err
+}
+
+// CollectionTrack represents a track entry within a collection.
+type CollectionTrack struct {
+	TrackID    string
+	TrackName  string
+	ArtistName string
+}
+
+// ListCollectionTracks returns all tracks stored in the given collection.
+func (db *DB) ListCollectionTracks(colID string) ([]CollectionTrack, error) {
+	rows, err := db.Query(`SELECT track_id, track_name, artist_name FROM collection_tracks WHERE collection_id=?`, colID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []CollectionTrack
+	for rows.Next() {
+		var ct CollectionTrack
+		if err := rows.Scan(&ct.TrackID, &ct.TrackName, &ct.ArtistName); err != nil {
+			return nil, err
+		}
+		res = append(res, ct)
+	}
+	return res, rows.Err()
+}

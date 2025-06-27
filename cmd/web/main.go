@@ -15,6 +15,7 @@ import (
 	"Smart-Music-Go/pkg/db"
 	"Smart-Music-Go/pkg/handlers"
 	"Smart-Music-Go/pkg/music"
+	"Smart-Music-Go/pkg/soundcloud"
 	"Smart-Music-Go/pkg/spotify"
 	"Smart-Music-Go/pkg/youtube"
 )
@@ -56,8 +57,17 @@ func main() {
 		log.Fatalf("spotify client init: %v", err)
 	}
 	var musicService music.Service = sc
-	if os.Getenv("MUSIC_SERVICE") == "youtube" {
+	switch os.Getenv("MUSIC_SERVICE") {
+	case "youtube":
 		musicService = &youtube.Client{Key: os.Getenv("YOUTUBE_API_KEY")}
+	case "soundcloud":
+		musicService = &soundcloud.Client{ClientID: os.Getenv("SOUNDCLOUD_CLIENT_ID")}
+	case "aggregate":
+		musicService = music.Aggregator{Services: []music.Service{
+			sc,
+			&youtube.Client{Key: os.Getenv("YOUTUBE_API_KEY")},
+			&soundcloud.Client{ClientID: os.Getenv("SOUNDCLOUD_CLIENT_ID")},
+		}}
 	}
 	// The authenticator handles the OAuth flow for user specific
 	// operations (like listing playlists). It needs the client credentials
@@ -90,6 +100,7 @@ func main() {
 	mux.HandleFunc("/api/recommendations", app.RecommendationsJSON)
 	mux.HandleFunc("/api/recommendations/mood", app.RecommendationsMood)
 	mux.HandleFunc("/login", app.Login)
+	mux.HandleFunc("/api/recommendations/advanced", app.RecommendationsAdvanced)
 	mux.HandleFunc("/callback", app.OAuthCallback)
 	mux.HandleFunc("/playlists", app.Playlists)
 	mux.HandleFunc("/api/playlists", app.PlaylistsJSON)
@@ -108,7 +119,16 @@ func main() {
 		}
 	})
 	mux.HandleFunc("/api/history", app.AddHistoryJSON)
+	mux.HandleFunc("/api/collections", app.CreateCollectionJSON)
+	mux.HandleFunc("/api/collections/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			app.AddCollectionTrackJSON(w, r)
+		} else {
+			app.ListCollectionTracksJSON(w, r)
+		}
+	})
 	mux.HandleFunc("/api/insights", app.InsightsJSON)
+	mux.HandleFunc("/api/insights/tracks", app.InsightsTracksJSON)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./ui/static"))))
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir("./ui/frontend/dist"))))
 
