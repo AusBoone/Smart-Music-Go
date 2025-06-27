@@ -655,3 +655,153 @@ func (app *Application) InsightsJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(res)
 }
+
+// InsightsTracksJSON returns the most played tracks for the last week. The number
+// of days can be customised via the 'days' query parameter.
+func (app *Application) InsightsTracksJSON(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	if days <= 0 {
+		days = 7
+	}
+	since := time.Now().AddDate(0, 0, -days)
+	res, err := app.DB.TopTracksSince(userCookie.Value, since)
+	if err != nil {
+		http.Error(w, "failed to load insights", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
+// CreateCollectionJSON starts a new collaborative playlist owned by the user.
+func (app *Application) CreateCollectionJSON(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	id, err := app.DB.CreateCollection(userCookie.Value)
+	if err != nil {
+		http.Error(w, "failed to create collection", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"id": id})
+}
+
+// AddCollectionTrackJSON appends a track to an existing collection.
+func (app *Application) AddCollectionTrackJSON(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	colID := strings.TrimPrefix(r.URL.Path, "/api/collections/")
+	colID = strings.TrimSuffix(colID, "/tracks")
+	if colID == "" {
+		http.Error(w, "missing collection id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		TrackID    string `json:"track_id"`
+		TrackName  string `json:"track_name"`
+		ArtistName string `json:"artist_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	if err := app.DB.AddTrackToCollection(colID, req.TrackID, req.TrackName, req.ArtistName); err != nil {
+		http.Error(w, "failed to add track", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+// ListCollectionTracksJSON returns tracks for a given collection.
+func (app *Application) ListCollectionTracksJSON(w http.ResponseWriter, r *http.Request) {
+	colID := strings.TrimPrefix(r.URL.Path, "/api/collections/")
+	colID = strings.TrimSuffix(colID, "/tracks")
+	if colID == "" {
+		http.Error(w, "missing collection id", http.StatusBadRequest)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	tracks, err := app.DB.ListCollectionTracks(colID)
+	if err != nil {
+		http.Error(w, "failed to list tracks", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tracks)
+}
+
+// RecommendationsAdvanced allows specifying additional audio features for recommendations.
+// Supported query parameters include min_energy and min_valence.
+func (app *Application) RecommendationsAdvanced(w http.ResponseWriter, r *http.Request) {
+	if app.SpotifyClient == nil {
+		http.Error(w, "spotify service required", http.StatusNotImplemented)
+		return
+	}
+	id := r.URL.Query().Get("track_id")
+	if id == "" {
+		http.Error(w, "missing track_id", http.StatusBadRequest)
+		return
+	}
+	attrs := libspotify.NewTrackAttributes()
+	if v, err := strconv.ParseFloat(r.URL.Query().Get("min_energy"), 64); err == nil && v > 0 {
+		attrs = attrs.MinEnergy(v)
+	}
+	if v, err := strconv.ParseFloat(r.URL.Query().Get("min_valence"), 64); err == nil && v > 0 {
+		attrs = attrs.MinValence(v)
+	}
+	tracks, err := app.SpotifyClient.GetRecommendationsWithAttrs([]string{id}, attrs)
+	if err != nil {
+		if err.Error() == "no recommendations found" {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, "recommendation error", http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tracks)
+}

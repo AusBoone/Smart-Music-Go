@@ -6,6 +6,8 @@ import Playlists from "./Playlists.jsx";
 import Favorites from "./Favorites.jsx";
 import Recommendations from "./Recommendations.jsx";
 import Mood from "./Mood.jsx";
+import Insights from "./Insights.jsx";
+import Collections from "./Collections.jsx";
 import "./App.css";
 
 function App() {
@@ -28,6 +30,8 @@ function App() {
         <button onClick={() => setView("mood")}>Mood</button>
         <button onClick={() => setView("playlists")}>Playlists</button>
         <button onClick={() => setView("favorites")}>Favorites</button>
+        <button onClick={() => setView("insights")}>Insights</button>
+        <button onClick={() => setView("collections")}>Collections</button>
         <button onClick={toggleTheme}>Toggle Theme</button>
       </nav>
       {/* Conditionally render the selected view component */}
@@ -39,8 +43,12 @@ function App() {
         <Mood />
       ) : view === "playlists" ? (
         <Playlists />
-      ) : (
+      ) : view === "favorites" ? (
         <Favorites />
+      ) : view === "insights" ? (
+        <Insights />
+      ) : (
+        <Collections />
       )}
     </div>
   );

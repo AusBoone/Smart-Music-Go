@@ -39,8 +39,10 @@ DATABASE_PATH=smartmusic.db
 ```
 The database schema is created automatically on startup, so no manual migrations are required.
 
-`MUSIC_SERVICE` selects the backend provider. Set to `spotify` (default) or
-`youtube`. When using the YouTube provider you must also set `YOUTUBE_API_KEY`.
+`MUSIC_SERVICE` selects the backend provider. Options are `spotify`, `youtube`,
+`soundcloud` or `aggregate`. When using the YouTube or SoundCloud providers you
+must set `YOUTUBE_API_KEY` or `SOUNDCLOUD_CLIENT_ID` respectively. The
+`aggregate` mode queries all available services.
 
 You can copy the provided `.env.example` to `.env` and populate your values:
 
@@ -142,7 +144,9 @@ contributing can be found in the [docs](docs) directory:
 Smart-Music-Go aims to evolve beyond a basic Spotify interface. Planned improvements include:
 
 - **Smart recommendations** that leverage Spotify's audio analysis API to suggest tracks or build playlists by mood or tempo.
-- **Multi-service search** across platforms like YouTube or SoundCloud for broader discovery.
+- **Multi-service search** across platforms like YouTube or SoundCloud for broader discovery. A new `aggregate` mode queries all providers at once.
+- **Listening insights** now provide top artists and top tracks over a chosen period.
+- **Collaborative playlists** APIs allow creating collections that multiple users can populate.
 - **Collaborative playlists** so users can share favorites and create collections together.
 - **Personal listening insights** stored in SQLite to highlight trends and weekly discoveries.
 - **Enhanced UI/UX** with theme switching and audio previews in the React frontend.

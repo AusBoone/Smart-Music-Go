@@ -78,3 +78,45 @@ func TestHistory(t *testing.T) {
 		t.Fatalf("unexpected summary: %+v", artists)
 	}
 }
+
+// TestTopTracksSince verifies the track summary query returns counts.
+func TestTopTracksSince(t *testing.T) {
+	d, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	now := time.Now()
+	d.AddHistory("u", "1", "Artist", now)
+	d.AddHistory("u", "1", "Artist", now.Add(time.Minute))
+	tracks, err := d.TopTracksSince("u", now.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracks) != 1 || tracks[0].TrackID != "1" || tracks[0].Count != 2 {
+		t.Fatalf("unexpected summary: %+v", tracks)
+	}
+}
+
+// TestCollections verifies creating a collection and adding tracks.
+func TestCollections(t *testing.T) {
+	d, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	id, err := d.CreateCollection("u")
+	if err != nil || id == "" {
+		t.Fatalf("create collection failed: %v", err)
+	}
+	if err := d.AddTrackToCollection(id, "1", "Song", "Artist"); err != nil {
+		t.Fatal(err)
+	}
+	tracks, err := d.ListCollectionTracks(id)
+	if err != nil || len(tracks) != 1 {
+		t.Fatalf("list tracks failed: %v %v", err, tracks)
+	}
+	if tracks[0].TrackID != "1" {
+		t.Fatalf("unexpected track %+v", tracks[0])
+	}
+}
