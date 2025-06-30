@@ -143,9 +143,10 @@ contributing can be found in the [docs](docs) directory:
 ## Vision
 Smart-Music-Go aims to evolve beyond a basic Spotify interface. Planned improvements include:
 
-- **Smart recommendations** that leverage Spotify's audio analysis API to suggest tracks or build playlists by mood or tempo.
+- **Smart recommendations** that leverage Spotify's audio analysis API to suggest tracks or build playlists by mood, tempo, energy and danceability.
 - **Multi-service search** across platforms like YouTube or SoundCloud for broader discovery. A new `aggregate` mode queries all providers at once.
 - **Listening insights** now provide top artists and top tracks over a chosen period.
+- **Monthly summaries** group your listening history by month for trend analysis.
 - **Collaborative playlists** APIs allow creating collections that multiple users can populate.
 - **Collaborative playlists** so users can share favorites and create collections together.
 - **Personal listening insights** stored in SQLite to highlight trends and weekly discoveries.

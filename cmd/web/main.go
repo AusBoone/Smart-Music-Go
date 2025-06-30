@@ -1,7 +1,8 @@
 // Command web initializes the Smart-Music-Go application and starts the HTTP
 // server. Configuration is provided via environment variables for Spotify API
 // credentials and database location. The server listens on port 4000 and
-// serves both HTML pages and a JSON API.
+// serves both HTML pages and a JSON API. Recent additions include monthly
+// insights and collaborative playlist routes.
 
 package main
 
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	libspotify "github.com/zmb3/spotify"
 
@@ -121,14 +123,26 @@ func main() {
 	mux.HandleFunc("/api/history", app.AddHistoryJSON)
 	mux.HandleFunc("/api/collections", app.CreateCollectionJSON)
 	mux.HandleFunc("/api/collections/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			app.AddCollectionTrackJSON(w, r)
-		} else {
-			app.ListCollectionTracksJSON(w, r)
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/tracks"):
+			if r.Method == http.MethodPost {
+				app.AddCollectionTrackJSON(w, r)
+			} else {
+				app.ListCollectionTracksJSON(w, r)
+			}
+		case strings.HasSuffix(r.URL.Path, "/users"):
+			if r.Method == http.MethodPost {
+				app.AddCollectionUserJSON(w, r)
+			} else {
+				http.NotFound(w, r)
+			}
+		default:
+			http.NotFound(w, r)
 		}
 	})
 	mux.HandleFunc("/api/insights", app.InsightsJSON)
 	mux.HandleFunc("/api/insights/tracks", app.InsightsTracksJSON)
+	mux.HandleFunc("/api/insights/monthly", app.InsightsMonthlyJSON)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./ui/static"))))
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir("./ui/frontend/dist"))))
 

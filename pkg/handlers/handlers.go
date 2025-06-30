@@ -8,6 +8,10 @@
 // The comments throughout this file document the reasoning behind key logic
 // such as token refresh and cookie signing so developers unfamiliar with the
 // project can quickly understand the flow.
+//
+// Updates: extended mood-based recommendation parameters, monthly insights API
+// and collection collaboration endpoints were added to further separate the
+// application from a basic Spotify wrapper.
 
 package handlers
 
@@ -199,10 +203,11 @@ func (app *Application) Recommendations(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// RecommendationsMood returns recommendations using mood or tempo attributes.
-// The track_id parameter is required while optional min_tempo/max_tempo values
-// narrow the tempo range. This handler only works when a Spotify client is
-// configured.
+// RecommendationsMood returns recommendations using mood based on tempo,
+// energy and danceability attributes. The track_id parameter is required.
+// Optional query parameters min_tempo/max_tempo, min_energy/max_energy and
+// min_dance/max_dance allow fine tuning. This handler only works when a
+// Spotify client is configured.
 func (app *Application) RecommendationsMood(w http.ResponseWriter, r *http.Request) {
 	if app.SpotifyClient == nil {
 		http.Error(w, "spotify service required", http.StatusNotImplemented)
@@ -215,6 +220,10 @@ func (app *Application) RecommendationsMood(w http.ResponseWriter, r *http.Reque
 	}
 	minTempo, _ := strconv.ParseFloat(r.URL.Query().Get("min_tempo"), 64)
 	maxTempo, _ := strconv.ParseFloat(r.URL.Query().Get("max_tempo"), 64)
+	minEnergy, _ := strconv.ParseFloat(r.URL.Query().Get("min_energy"), 64)
+	maxEnergy, _ := strconv.ParseFloat(r.URL.Query().Get("max_energy"), 64)
+	minDance, _ := strconv.ParseFloat(r.URL.Query().Get("min_dance"), 64)
+	maxDance, _ := strconv.ParseFloat(r.URL.Query().Get("max_dance"), 64)
 	feats, err := app.SpotifyClient.GetAudioFeatures(id)
 	if err != nil || len(feats) == 0 {
 		http.Error(w, "audio feature error", http.StatusInternalServerError)
@@ -226,6 +235,18 @@ func (app *Application) RecommendationsMood(w http.ResponseWriter, r *http.Reque
 		maxTempo = float64(feats[0].Tempo) + 10
 	}
 	attrs := libspotify.NewTrackAttributes().MinTempo(minTempo).MaxTempo(maxTempo)
+	if minEnergy > 0 {
+		attrs = attrs.MinEnergy(minEnergy)
+	}
+	if maxEnergy > 0 {
+		attrs = attrs.MaxEnergy(maxEnergy)
+	}
+	if minDance > 0 {
+		attrs = attrs.MinDanceability(minDance)
+	}
+	if maxDance > 0 {
+		attrs = attrs.MaxDanceability(maxDance)
+	}
 	tracks, err := app.SpotifyClient.GetRecommendationsWithAttrs([]string{id}, attrs)
 	if err != nil {
 		if err.Error() == "no recommendations found" {
@@ -688,6 +709,41 @@ func (app *Application) InsightsTracksJSON(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(res)
 }
 
+// InsightsMonthlyJSON returns playback counts grouped by month. The optional
+// 'since' query parameter accepts a YYYY-MM-DD date from which to start the
+// aggregation; defaults to one year ago.
+func (app *Application) InsightsMonthlyJSON(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	sinceStr := r.URL.Query().Get("since")
+	since := time.Now().AddDate(-1, 0, 0)
+	if sinceStr != "" {
+		if t, err := time.Parse("2006-01-02", sinceStr); err == nil {
+			since = t
+		}
+	}
+	res, err := app.DB.MonthlyPlayCountsSince(userCookie.Value, since)
+	if err != nil {
+		http.Error(w, "failed to load insights", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
 // CreateCollectionJSON starts a new collaborative playlist owned by the user.
 func (app *Application) CreateCollectionJSON(w http.ResponseWriter, r *http.Request) {
 	userCookie, err := r.Cookie("spotify_user_id")
@@ -748,6 +804,44 @@ func (app *Application) AddCollectionTrackJSON(w http.ResponseWriter, r *http.Re
 	}
 	if err := app.DB.AddTrackToCollection(colID, req.TrackID, req.TrackName, req.ArtistName); err != nil {
 		http.Error(w, "failed to add track", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+// AddCollectionUserJSON associates another user with the specified collection
+// so they can contribute tracks. The body must include a user_id field.
+func (app *Application) AddCollectionUserJSON(w http.ResponseWriter, r *http.Request) {
+	userCookie, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
+		userCookie.Value = v
+	} else {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	colID := strings.TrimPrefix(r.URL.Path, "/api/collections/")
+	colID = strings.TrimSuffix(colID, "/users")
+	if colID == "" {
+		http.Error(w, "missing collection id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	if err := app.DB.AddUserToCollection(colID, req.UserID); err != nil {
+		http.Error(w, "failed to add user", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
