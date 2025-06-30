@@ -2,7 +2,8 @@
 // a SQLite database and exposes helper methods for storing OAuth tokens and
 // user favorites. The package is intentionally small to keep the example
 // simple; callers are expected to open a single DB instance using New and reuse
-// it for all operations.
+// it for all operations. Recent updates add collaborative playlist helpers and
+// monthly listening summaries.
 
 package db
 
@@ -214,6 +215,39 @@ func (db *DB) ListCollectionTracks(colID string) ([]CollectionTrack, error) {
 			return nil, err
 		}
 		res = append(res, ct)
+	}
+	return res, rows.Err()
+}
+
+// AddUserToCollection grants access to an existing collection for a user.
+// It inserts a row into the collection_users table linking the user
+// to the playlist. Duplicate entries are ignored.
+func (db *DB) AddUserToCollection(colID, userID string) error {
+	_, err := db.Exec(`INSERT INTO collection_users(collection_id, user_id) SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM collection_users WHERE collection_id=? AND user_id=?)`, colID, userID, colID, userID)
+	return err
+}
+
+// MonthCount groups play count totals by month in YYYY-MM format.
+type MonthCount struct {
+	Month string
+	Count int
+}
+
+// MonthlyPlayCountsSince aggregates listening history per month starting from
+// the provided time. Results are ordered chronologically.
+func (db *DB) MonthlyPlayCountsSince(userID string, since time.Time) ([]MonthCount, error) {
+	rows, err := db.Query(`SELECT strftime('%Y-%m', played_at) m, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY m ORDER BY m`, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res []MonthCount
+	for rows.Next() {
+		var mc MonthCount
+		if err := rows.Scan(&mc.Month, &mc.Count); err != nil {
+			return nil, err
+		}
+		res = append(res, mc)
 	}
 	return res, rows.Err()
 }

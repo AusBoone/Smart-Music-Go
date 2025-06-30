@@ -120,3 +120,52 @@ func TestCollections(t *testing.T) {
 		t.Fatalf("unexpected track %+v", tracks[0])
 	}
 }
+
+// TestAddUserToCollection ensures additional users can be associated with a collection.
+func TestAddUserToCollection(t *testing.T) {
+	d, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	id, _ := d.CreateCollection("owner")
+	if err := d.AddUserToCollection(id, "user2"); err != nil {
+		t.Fatal(err)
+	}
+	// Insert again to verify the IGNORE behaviour does not error
+	if err := d.AddUserToCollection(id, "user2"); err != nil {
+		t.Fatal(err)
+	}
+	// Ensure user was added by querying list of users
+	rows, err := d.Query(`SELECT COUNT(*) FROM collection_users WHERE collection_id=? AND user_id=?`, id, "user2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var c int
+	if rows.Next() {
+		rows.Scan(&c)
+	}
+	if c != 1 {
+		t.Fatalf("expected 1 user row got %d", c)
+	}
+}
+
+// TestMonthlyPlayCountsSince verifies monthly aggregation of history data.
+func TestMonthlyPlayCountsSince(t *testing.T) {
+	d, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	base := time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC)
+	d.AddHistory("u", "1", "Artist", base)
+	d.AddHistory("u", "2", "Artist", base.AddDate(0, 1, 0))
+	counts, err := d.MonthlyPlayCountsSince("u", base.AddDate(0, -1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(counts) != 2 || counts[0].Count != 1 || counts[1].Count != 1 {
+		t.Fatalf("unexpected counts %+v", counts)
+	}
+}
