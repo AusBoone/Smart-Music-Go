@@ -3,7 +3,10 @@
 // providers to broaden search results and recommendations.
 package music
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 // Aggregator queries each configured Service and merges the results.
 // It is useful when the application wants to search across multiple
@@ -15,7 +18,7 @@ type Aggregator struct {
 // SearchTrack returns the union of results from all underlying services.
 // Duplicates are removed based on track ID. Failure of one service does not
 // prevent results from others.
-func (a Aggregator) SearchTrack(q string) ([]Track, error) {
+func (a Aggregator) SearchTrack(ctx context.Context, q string) ([]Track, error) {
 	if len(a.Services) == 0 {
 		return nil, nil
 	}
@@ -26,7 +29,7 @@ func (a Aggregator) SearchTrack(q string) ([]Track, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tracks, _ := svc.SearchTrack(q)
+			tracks, _ := svc.SearchTrack(ctx, q)
 			resCh <- tracks
 		}()
 	}
@@ -48,7 +51,7 @@ func (a Aggregator) SearchTrack(q string) ([]Track, error) {
 
 // GetRecommendations merges recommendations from all services. Only the first
 // seed ID is passed through to providers that do not support multiple seeds.
-func (a Aggregator) GetRecommendations(seedIDs []string) ([]Track, error) {
+func (a Aggregator) GetRecommendations(ctx context.Context, seedIDs []string) ([]Track, error) {
 	if len(a.Services) == 0 {
 		return nil, nil
 	}
@@ -59,7 +62,7 @@ func (a Aggregator) GetRecommendations(seedIDs []string) ([]Track, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tracks, _ := svc.GetRecommendations(seedIDs)
+			tracks, _ := svc.GetRecommendations(ctx, seedIDs)
 			resCh <- tracks
 		}()
 	}

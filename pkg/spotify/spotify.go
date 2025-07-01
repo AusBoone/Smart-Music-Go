@@ -3,6 +3,10 @@
 // client credentials flow and exposes a minimal interface required by the
 // handlers package. Errors are returned directly from the underlying client so
 // callers can inspect them if needed.
+//
+// All exported methods now accept a context parameter allowing callers to
+// cancel long running requests. The wrapped library does not provide context
+// support so cancellation is checked explicitly before each call.
 
 package spotify
 
@@ -61,8 +65,13 @@ func NewSpotifyClient(clientID string, clientSecret string) (*SpotifyClient, err
 // set is empty.
 // SearchTrack implements music.Service by querying the Spotify API for the
 // supplied track name and returning matching items.
-func (sc *SpotifyClient) SearchTrack(track string) ([]music.Track, error) {
+func (sc *SpotifyClient) SearchTrack(ctx context.Context, track string) ([]music.Track, error) {
 	// Use the wrapped client to search for the track name.
+	// The underlying client does not accept a context, but we honour the
+	// provided one by checking for cancellation before returning.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	results, err := sc.client.Search(track, spotify.SearchTypeTrack)
 	if err != nil {
 		return nil, err
@@ -85,10 +94,13 @@ func (sc *SpotifyClient) SearchTrack(track string) ([]music.Track, error) {
 // generated so callers can distinguish the empty case.
 // GetRecommendations implements music.Service to return tracks related to the
 // provided seeds using Spotify's recommendation API.
-func (sc *SpotifyClient) GetRecommendations(seedIDs []string) ([]music.Track, error) {
+func (sc *SpotifyClient) GetRecommendations(ctx context.Context, seedIDs []string) ([]music.Track, error) {
 	seeds := spotify.Seeds{Tracks: make([]spotify.ID, len(seedIDs))}
 	for i, id := range seedIDs {
 		seeds.Tracks[i] = spotify.ID(id)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	recs, err := sc.client.GetRecommendations(seeds, nil, nil)
 	if err != nil {
@@ -121,10 +133,13 @@ func (sc *SpotifyClient) GetAudioFeatures(ids ...string) ([]*spotify.AudioFeatur
 // GetRecommendationsWithAttrs returns recommendations using additional track
 // attributes such as tempo or energy. Callers can pass nil attrs to use the
 // default behaviour.
-func (sc *SpotifyClient) GetRecommendationsWithAttrs(seedIDs []string, attrs *spotify.TrackAttributes) ([]music.Track, error) {
+func (sc *SpotifyClient) GetRecommendationsWithAttrs(ctx context.Context, seedIDs []string, attrs *spotify.TrackAttributes) ([]music.Track, error) {
 	seeds := spotify.Seeds{Tracks: make([]spotify.ID, len(seedIDs))}
 	for i, id := range seedIDs {
 		seeds.Tracks[i] = spotify.ID(id)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	recs, err := sc.client.GetRecommendations(seeds, attrs, nil)
 	if err != nil {

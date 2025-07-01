@@ -30,11 +30,11 @@ type fakeSearcher struct {
 
 var testKey = []byte("test-key")
 
-func (f fakeSearcher) SearchTrack(track string) ([]music.Track, error) {
+func (f fakeSearcher) SearchTrack(ctx context.Context, track string) ([]music.Track, error) {
 	return f.tracks, f.err
 }
 
-func (f fakeSearcher) GetRecommendations(seedIDs []string) ([]music.Track, error) {
+func (f fakeSearcher) GetRecommendations(ctx context.Context, seedIDs []string) ([]music.Track, error) {
 	return f.tracks, f.err
 }
 
@@ -371,5 +371,62 @@ func TestSearchJSONRefresh(t *testing.T) {
 	tok, _ := d.GetToken("u")
 	if tok.AccessToken != "new" {
 		t.Errorf("token not refreshed in db")
+	}
+}
+
+// TestAddHistoryAndCollections covers the collaborative playlist handlers and
+// history recording endpoints. It ensures database rows are created and proper
+// status codes are returned.
+func TestAddHistoryAndCollections(t *testing.T) {
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &Application{DB: d, SignKey: testKey}
+
+	// Record a play event via the history endpoint.
+	histReq := httptest.NewRequest(http.MethodPost, "/api/history", strings.NewReader(`{"track_id":"1","artist_name":"Artist"}`))
+	histReq.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr := httptest.NewRecorder()
+	app.AddHistoryJSON(rr, histReq)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201 got %d", rr.Code)
+	}
+	counts, _ := d.TopTracksSince("u", time.Now().Add(-time.Hour))
+	if len(counts) != 1 || counts[0].TrackID != "1" {
+		t.Fatalf("history not recorded: %+v", counts)
+	}
+
+	// Create a new collection then add a track and a user.
+	colReq := httptest.NewRequest(http.MethodPost, "/api/collections", nil)
+	colReq.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr = httptest.NewRecorder()
+	app.CreateCollectionJSON(rr, colReq)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("create collection status %d", rr.Code)
+	}
+	var res map[string]string
+	json.NewDecoder(rr.Body).Decode(&res)
+	colID := res["id"]
+
+	trackReq := httptest.NewRequest(http.MethodPost, "/api/collections/"+colID+"/tracks", strings.NewReader(`{"track_id":"1","track_name":"Song","artist_name":"Artist"}`))
+	trackReq.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr = httptest.NewRecorder()
+	app.AddCollectionTrackJSON(rr, trackReq)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("add track status %d", rr.Code)
+	}
+
+	tracks, _ := d.ListCollectionTracks(colID)
+	if len(tracks) != 1 || tracks[0].TrackID != "1" {
+		t.Fatalf("track not stored: %+v", tracks)
+	}
+
+	userReq := httptest.NewRequest(http.MethodPost, "/api/collections/"+colID+"/users", strings.NewReader(`{"user_id":"other"}`))
+	userReq.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr = httptest.NewRecorder()
+	app.AddCollectionUserJSON(rr, userReq)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("add user status %d", rr.Code)
 	}
 }

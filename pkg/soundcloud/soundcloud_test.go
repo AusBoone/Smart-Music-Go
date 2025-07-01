@@ -1,6 +1,7 @@
 package soundcloud
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,7 +20,7 @@ func (rt roundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 func TestSearchTrack(t *testing.T) {
 	data := `{"collection":[{"id":1,"title":"Song","user":{"username":"Artist"}}]}`
 	c := &Client{ClientID: "x", HTTP: &http.Client{Transport: roundTripper{data: data}}}
-	res, err := c.SearchTrack("test")
+	res, err := c.SearchTrack(context.Background(), "test")
 	if err != nil {
 		t.Fatal(err)
 	}

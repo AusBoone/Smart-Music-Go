@@ -110,7 +110,7 @@ func (app *Application) Search(w http.ResponseWriter, r *http.Request) {
 
 	// Perform the search using the configured music service. This typically
 	// uses client-credential flow and does not require a user session.
-	results, err := app.Music.SearchTrack(track)
+	results, err := app.Music.SearchTrack(r.Context(), track)
 	var userID string
 	if uc, errCookie := r.Cookie("spotify_user_id"); errCookie == nil {
 		if v, ok := verifyValue(uc.Value, app.SignKey); ok {
@@ -184,7 +184,7 @@ func (app *Application) Recommendations(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "missing track_id", http.StatusBadRequest)
 		return
 	}
-	tracks, err := app.Music.GetRecommendations([]string{id})
+	tracks, err := app.Music.GetRecommendations(r.Context(), []string{id})
 	if err != nil {
 		if err.Error() == "no recommendations found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -247,7 +247,7 @@ func (app *Application) RecommendationsMood(w http.ResponseWriter, r *http.Reque
 	if maxDance > 0 {
 		attrs = attrs.MaxDanceability(maxDance)
 	}
-	tracks, err := app.SpotifyClient.GetRecommendationsWithAttrs([]string{id}, attrs)
+	tracks, err := app.SpotifyClient.GetRecommendationsWithAttrs(r.Context(), []string{id}, attrs)
 	if err != nil {
 		if err.Error() == "no recommendations found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -266,7 +266,7 @@ func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
 	// Grab the requested track from the query string.
 	track := r.URL.Query().Get("track")
 	// Start with a search using the active music service.
-	results, err := app.Music.SearchTrack(track)
+	results, err := app.Music.SearchTrack(r.Context(), track)
 	var userID string
 	if uc, errCookie := r.Cookie("spotify_user_id"); errCookie == nil {
 		if v, ok := verifyValue(uc.Value, app.SignKey); ok {
@@ -307,7 +307,7 @@ func (app *Application) RecommendationsJSON(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "missing track_id", http.StatusBadRequest)
 		return
 	}
-	tracks, err := app.Music.GetRecommendations([]string{id})
+	tracks, err := app.Music.GetRecommendations(r.Context(), []string{id})
 	if err != nil {
 		if err.Error() == "no recommendations found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -887,7 +887,7 @@ func (app *Application) RecommendationsAdvanced(w http.ResponseWriter, r *http.R
 	if v, err := strconv.ParseFloat(r.URL.Query().Get("min_valence"), 64); err == nil && v > 0 {
 		attrs = attrs.MinValence(v)
 	}
-	tracks, err := app.SpotifyClient.GetRecommendationsWithAttrs([]string{id}, attrs)
+	tracks, err := app.SpotifyClient.GetRecommendationsWithAttrs(r.Context(), []string{id}, attrs)
 	if err != nil {
 		if err.Error() == "no recommendations found" {
 			http.Error(w, err.Error(), http.StatusNotFound)

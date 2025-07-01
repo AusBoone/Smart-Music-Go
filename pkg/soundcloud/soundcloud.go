@@ -5,17 +5,20 @@
 package soundcloud
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	libspotify "github.com/zmb3/spotify"
 
 	"Smart-Music-Go/pkg/music"
 )
 
-// Client talks to the SoundCloud API.
+// Client talks to the SoundCloud API. If HTTP is nil a client with a 10 second
+// timeout is used. The zero value is therefore ready for basic use.
 type Client struct {
 	ClientID string
 	HTTP     *http.Client
@@ -25,16 +28,17 @@ type Client struct {
 var _ music.Service = (*Client)(nil)
 
 // SearchTrack queries the SoundCloud search API and converts results.
-func (c *Client) SearchTrack(q string) ([]music.Track, error) {
+func (c *Client) SearchTrack(ctx context.Context, q string) ([]music.Track, error) {
 	if c.HTTP == nil {
-		c.HTTP = http.DefaultClient
+		c.HTTP = &http.Client{Timeout: 10 * time.Second}
 	}
 	params := url.Values{
 		"q":         {q},
 		"client_id": {c.ClientID},
 		"limit":     {"5"},
 	}
-	resp, err := c.HTTP.Get("https://api-v2.soundcloud.com/search/tracks?" + params.Encode())
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://api-v2.soundcloud.com/search/tracks?"+params.Encode(), nil)
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +78,6 @@ func (c *Client) SearchTrack(q string) ([]music.Track, error) {
 }
 
 // GetRecommendations is not supported for SoundCloud and returns an error.
-func (c *Client) GetRecommendations(seedIDs []string) ([]music.Track, error) {
+func (c *Client) GetRecommendations(ctx context.Context, seedIDs []string) ([]music.Track, error) {
 	return nil, fmt.Errorf("recommendations not supported")
 }
