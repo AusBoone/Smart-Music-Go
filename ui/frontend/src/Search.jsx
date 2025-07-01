@@ -1,5 +1,6 @@
 // Search lets the user query tracks via the server API and mark them as
-// favorites.
+// favorites. Returned tracks are displayed using the "card" style with a
+// subtle fade-in animation defined in the global CSS.
 import { useState } from 'react'
 
 function Search({ theme }) {
@@ -9,25 +10,31 @@ function Search({ theme }) {
   const [results, setResults] = useState([])
   // Error message to display if the search fails.
   const [error, setError] = useState('')
+  // Indicates the search request is in progress.
+  const [loading, setLoading] = useState(false)
 
   const handleSearch = async () => {
     // Skip searching if the input is empty.
     if (!query) return
     try {
+      setLoading(true)
       const res = await fetch(`/api/search?track=${encodeURIComponent(query)}`)
       if (!res.ok) {
         // Attempt to read an error message from the response.
         const data = await res.json().catch(() => ({}))
         setError(data.error || 'Search failed')
         setResults([])
+        setLoading(false)
         return
       }
       const data = await res.json()
       setResults(data)
       setError('')
+      setLoading(false)
     } catch {
       setError('Search failed')
       setResults([])
+      setLoading(false)
     }
   }
 
@@ -53,11 +60,12 @@ function Search({ theme }) {
         placeholder="Enter a track name"
       />
       <button onClick={handleSearch}>Search</button>
+      {loading && <p>Loading...</p>}
       {error && <p>{error}</p>}
       <div className="results">
         {/* Render each returned track with basic info and a Favorite button */}
         {results.map((t) => (
-          <div className="track" key={t.ID}>
+          <div className="track card fade-in" key={t.ID}>
             {t.Album?.Images?.length > 0 && (
               <img src={t.Album.Images[0].URL} alt="Album art" />
             )}

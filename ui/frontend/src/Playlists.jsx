@@ -6,6 +6,8 @@ function Playlists() {
   const [playlists, setPlaylists] = useState([])
   // Holds an error message when loading fails.
   const [error, setError] = useState('')
+  // Loading indicator while playlists are fetched.
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     // Fetch the user's playlists on component mount.
@@ -16,6 +18,7 @@ function Playlists() {
       })
       .then((data) => setPlaylists(data.Playlists || []))
       .catch(() => setError('Failed to load playlists'))
+      .finally(() => setLoading(false))
   }, [])
 
   return (
@@ -24,6 +27,7 @@ function Playlists() {
       <p>
         <a href="/login">Login with Spotify</a>
       </p>
+      {loading && <p>Loading...</p>}
       {error && <p>{error}</p>}
       <ul>
         {/* Render playlist names in a simple list */}

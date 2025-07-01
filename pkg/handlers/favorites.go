@@ -30,8 +30,12 @@ func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 		TrackName  string `json:"track_name"`
 		ArtistName string `json:"artist_name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		respondJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.TrackID == "" || req.TrackName == "" || req.ArtistName == "" {
+		respondJSONError(w, http.StatusBadRequest, "track_id, track_name and artist_name are required")
 		return
 	}
 	if app.DB == nil {

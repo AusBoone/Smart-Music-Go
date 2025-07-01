@@ -1,16 +1,72 @@
+/*
+ * index.css defines base styling and CSS variables for the React UI.
+ * It is imported once in main.jsx and applies to every component.
+ * Colors, fonts and global animations are centralized here so
+ * individual components remain lightweight.
+ */
 :root {
+  /*
+   * Global CSS variables used across the application. These allow the
+   * theme to switch dynamically while keeping the styles consistent.
+   * Colors mirror the light/dark theme values defined in App.css.
+   */
+  --bg-light: #ffffff;
+  --bg-dark: #242424;
+  --text-light: #000000;
+  --text-dark: #ffffff;
+  --accent-color: #646cff;
+  --button-hover-bg: #353535;
+  --card-bg-light: #f9f9f9;
+  --card-bg-dark: #333333;
+
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  background-color: var(--bg-dark);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Basic card styling for track and playlist items. */
+.card {
+  background-color: var(--card-bg-dark);
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  padding: 1rem;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+/* Light mode overrides using the variables defined above. */
+.light .card {
+  background-color: var(--card-bg-light);
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Simple fade-in animation for view transitions and new elements. */
+.fade-in {
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 a {
@@ -47,7 +103,8 @@ button {
   transition: border-color 0.25s;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: var(--accent-color);
+  background-color: var(--button-hover-bg);
 }
 button:focus,
 button:focus-visible {
@@ -57,12 +114,12 @@ button:focus-visible {
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
-    background-color: #ffffff;
+    background-color: var(--bg-light);
   }
   a:hover {
     color: #747bff;
   }
   button {
-    background-color: #f9f9f9;
+    background-color: var(--card-bg-light);
   }
 }

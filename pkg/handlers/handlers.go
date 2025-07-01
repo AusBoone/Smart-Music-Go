@@ -11,7 +11,8 @@
 //
 // Updates: extended mood-based recommendation parameters, monthly insights API
 // and collection collaboration endpoints were added to further separate the
-// application from a basic Spotify wrapper.
+// application from a basic Spotify wrapper. Additional validation and JSON error
+// helpers were introduced to provide clearer API responses.
 
 package handlers
 
@@ -52,6 +53,14 @@ type Application struct {
 	Authenticator libspotify.Authenticator
 	DB            *db.DB
 	SignKey       []byte
+}
+
+// respondJSONError writes a JSON formatted error message. It standardises
+// error responses across handlers so clients can parse them consistently.
+func respondJSONError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
 // Home renders the landing page.  It shows the search form where users can
@@ -406,8 +415,12 @@ func (app *Application) AddHistoryJSON(w http.ResponseWriter, r *http.Request) {
 		TrackID    string `json:"track_id"`
 		ArtistName string `json:"artist_name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		respondJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.TrackID == "" || req.ArtistName == "" {
+		respondJSONError(w, http.StatusBadRequest, "track_id and artist_name are required")
 		return
 	}
 	if err := app.DB.AddHistory(userCookie.Value, req.TrackID, req.ArtistName, time.Now()); err != nil {
@@ -467,8 +480,12 @@ func (app *Application) AddCollectionTrackJSON(w http.ResponseWriter, r *http.Re
 		TrackName  string `json:"track_name"`
 		ArtistName string `json:"artist_name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		respondJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.TrackID == "" || req.TrackName == "" || req.ArtistName == "" {
+		respondJSONError(w, http.StatusBadRequest, "track_id, track_name and artist_name are required")
 		return
 	}
 	if app.DB == nil {
@@ -505,8 +522,12 @@ func (app *Application) AddCollectionUserJSON(w http.ResponseWriter, r *http.Req
 	var req struct {
 		UserID string `json:"user_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		respondJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.UserID == "" {
+		respondJSONError(w, http.StatusBadRequest, "user_id is required")
 		return
 	}
 	if app.DB == nil {

@@ -6,6 +6,8 @@ function Favorites() {
   const [favs, setFavs] = useState([])
   // Error message shown when the fetch fails.
   const [error, setError] = useState('')
+  // Indicates favorites are being loaded.
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     // Retrieve favorites once when the component mounts.
@@ -16,11 +18,13 @@ function Favorites() {
       })
       .then((data) => setFavs(data))
       .catch(() => setError('Failed to load favorites'))
+      .finally(() => setLoading(false))
   }, [])
 
   return (
     <div>
       <h2>Your Favorites</h2>
+      {loading && <p>Loading...</p>}
       {error && <p>{error}</p>}
       <ul>
         {/* Display each favorite track */}
