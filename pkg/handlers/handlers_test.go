@@ -244,6 +244,59 @@ func TestAddFavoriteAuth(t *testing.T) {
 	}
 }
 
+// TestAddFavoriteValidation verifies that missing fields return a 400 error.
+func TestAddFavoriteValidation(t *testing.T) {
+	d, _ := db.New(":memory:")
+	app := &Application{DB: d, SignKey: testKey}
+	req := httptest.NewRequest(http.MethodPost, "/favorites", strings.NewReader(`{}`))
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr := httptest.NewRecorder()
+	app.AddFavorite(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 got %d", rr.Code)
+	}
+}
+
+// TestAddHistoryValidation ensures missing fields cause a 400 response.
+func TestAddHistoryValidation(t *testing.T) {
+	d, _ := db.New(":memory:")
+	app := &Application{DB: d, SignKey: testKey}
+	req := httptest.NewRequest(http.MethodPost, "/api/history", strings.NewReader(`{}`))
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr := httptest.NewRecorder()
+	app.AddHistoryJSON(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 got %d", rr.Code)
+	}
+}
+
+// TestAddCollectionTrackValidation verifies that invalid JSON payloads
+// for AddCollectionTrackJSON return a 400 status.
+func TestAddCollectionTrackValidation(t *testing.T) {
+	d, _ := db.New(":memory:")
+	app := &Application{DB: d, SignKey: testKey}
+	req := httptest.NewRequest(http.MethodPost, "/api/collections/abc/tracks", strings.NewReader("{"))
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr := httptest.NewRecorder()
+	app.AddCollectionTrackJSON(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 got %d", rr.Code)
+	}
+}
+
+// TestAddCollectionUserValidation ensures missing fields return 400.
+func TestAddCollectionUserValidation(t *testing.T) {
+	d, _ := db.New(":memory:")
+	app := &Application{DB: d, SignKey: testKey}
+	req := httptest.NewRequest(http.MethodPost, "/api/collections/abc/users", strings.NewReader(`{}`))
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr := httptest.NewRecorder()
+	app.AddCollectionUserJSON(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 got %d", rr.Code)
+	}
+}
+
 type rt struct{ data string }
 
 func (r rt) RoundTrip(req *http.Request) (*http.Response, error) {

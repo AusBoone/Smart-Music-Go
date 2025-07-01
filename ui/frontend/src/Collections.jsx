@@ -4,6 +4,8 @@ import { useState } from "react";
 function Collections() {
   const [id, setId] = useState("");
   const [tracks, setTracks] = useState([]);
+  // Loading state for track retrieval.
+  const [loading, setLoading] = useState(false);
 
   const create = async () => {
     const res = await fetch("/api/collections", { method: "POST" });
@@ -12,8 +14,10 @@ function Collections() {
   };
 
   const load = async () => {
+    setLoading(true);
     const res = await fetch(`/api/collections/${id}/tracks`);
     setTracks(await res.json());
+    setLoading(false);
   };
 
   return (
@@ -25,6 +29,7 @@ function Collections() {
           <button onClick={load}>Load Tracks</button>
         </div>
       )}
+      {loading && <p>Loading...</p>}
       <ul>
         {tracks.map((t) => (
           <li key={t.TrackID}>

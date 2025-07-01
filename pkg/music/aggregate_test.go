@@ -44,11 +44,45 @@ func TestAggregatorGetRecommendations(t *testing.T) {
 	}
 }
 
+// TestAggregatorNoServices returns nil results when no services are configured.
+func TestAggregatorNoServices(t *testing.T) {
+	agg := Aggregator{}
+	res, err := agg.SearchTrack(context.Background(), "q")
+	if err != nil || len(res) != 0 {
+		t.Fatalf("expected empty results, got %v %v", res, err)
+	}
+	recs, err := agg.GetRecommendations(context.Background(), []string{"x"})
+	if err != nil || len(recs) != 0 {
+		t.Fatalf("expected empty recommendations, got %v %v", recs, err)
+	}
+}
+
+// TestAggregatorAllErrors ensures an error is returned when every service fails.
+func TestAggregatorAllErrors(t *testing.T) {
+	svc := failingService{err: context.DeadlineExceeded}
+	agg := Aggregator{Services: []Service{svc, svc}}
+	if _, err := agg.SearchTrack(context.Background(), "q"); err == nil {
+		t.Fatal("expected error when all services fail")
+	}
+	if _, err := agg.GetRecommendations(context.Background(), []string{"x"}); err == nil {
+		t.Fatal("expected error when all services fail")
+	}
+}
+
 type fakeService struct{ tracks []Track }
 
 func (f fakeService) SearchTrack(context.Context, string) ([]Track, error) { return f.tracks, nil }
 func (f fakeService) GetRecommendations(context.Context, []string) ([]Track, error) {
 	return f.tracks, nil
+}
+
+// failingService always returns the provided error. It is used to simulate
+// complete service outages when testing the aggregator's error handling.
+type failingService struct{ err error }
+
+func (f failingService) SearchTrack(context.Context, string) ([]Track, error) { return nil, f.err }
+func (f failingService) GetRecommendations(context.Context, []string) ([]Track, error) {
+	return nil, f.err
 }
 
 func newTrack(id string) Track {

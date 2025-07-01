@@ -1,3 +1,5 @@
+// Basic end-to-end tests verifying key UI functionality. These use
+// Playwright's browser automation to simulate real user interactions.
 const { test, expect } = require('@playwright/test');
 
 test('loads homepage', async ({ page }) => {

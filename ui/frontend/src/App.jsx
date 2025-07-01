@@ -1,6 +1,8 @@
 // App is the root component for the React UI. It switches between the
-// search, playlists and favorites views.
-import { useState } from "react";
+// various views (search, playlists, favorites, etc.) and controls the
+// light/dark theme. This file also applies a small fade animation when
+// navigating between sections to make the interface feel more responsive.
+import { useState, useEffect } from "react";
 import Search from "./Search.jsx";
 import Playlists from "./Playlists.jsx";
 import Favorites from "./Favorites.jsx";
@@ -13,14 +15,33 @@ import "./App.css";
 function App() {
   // Track which section of the app is currently visible.
   const [view, setView] = useState("search");
-  // Light or dark theme for styling.
-  const [theme, setTheme] = useState("light");
+  // Light or dark theme for styling. The initial value is read from
+  // localStorage so returning users keep their preference.
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem("theme") || "light",
+  );
+  // When true the container receives the fade-in class for a short
+  // animation whenever the view changes.
+  const [animate, setAnimate] = useState(false);
+
+  // Trigger animation on view changes and clear the flag after the
+  // duration finishes so the class can be re-applied later.
+  useEffect(() => {
+    setAnimate(true);
+    const timer = setTimeout(() => setAnimate(false), 400);
+    return () => clearTimeout(timer);
+  }, [view]);
 
   const toggleTheme = () =>
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
 
+  // Persist the current theme in localStorage whenever it changes.
+  useEffect(() => {
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
   return (
-    <div className={`App ${theme}`}>
+    <div className={`App ${theme} ${animate ? "fade-in" : ""}`}>
       <h1>Smart Music Go</h1>
       <nav>
         <button onClick={() => setView("search")}>Search</button>

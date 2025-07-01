@@ -1,6 +1,10 @@
 // Package music provides interfaces for interacting with music services.
 // This file implements an aggregation service which combines multiple
 // providers to broaden search results and recommendations.
+//
+// Update: error handling now surfaces an error when all configured
+// services fail. Previously failures were swallowed and an empty slice
+// was returned, making diagnosis difficult.
 package music
 
 import (
@@ -22,29 +26,45 @@ func (a Aggregator) SearchTrack(ctx context.Context, q string) ([]Track, error) 
 	if len(a.Services) == 0 {
 		return nil, nil
 	}
+	type result struct {
+		tracks []Track
+		err    error
+	}
 	var wg sync.WaitGroup
-	resCh := make(chan []Track, len(a.Services))
+	resCh := make(chan result, len(a.Services))
 	for _, svc := range a.Services {
 		svc := svc
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tracks, _ := svc.SearchTrack(ctx, q)
-			resCh <- tracks
+			tracks, err := svc.SearchTrack(ctx, q)
+			resCh <- result{tracks: tracks, err: err}
 		}()
 	}
 	wg.Wait()
 	close(resCh)
 	seen := make(map[string]struct{})
 	var merged []Track
+	var firstErr error
+	successes := 0
 	for r := range resCh {
-		for _, t := range r {
+		if r.err != nil {
+			if firstErr == nil {
+				firstErr = r.err
+			}
+			continue
+		}
+		successes++
+		for _, t := range r.tracks {
 			id := string(t.ID)
 			if _, ok := seen[id]; !ok {
 				seen[id] = struct{}{}
 				merged = append(merged, t)
 			}
 		}
+	}
+	if successes == 0 && firstErr != nil {
+		return nil, firstErr
 	}
 	return merged, nil
 }
@@ -55,29 +75,45 @@ func (a Aggregator) GetRecommendations(ctx context.Context, seedIDs []string) ([
 	if len(a.Services) == 0 {
 		return nil, nil
 	}
+	type result struct {
+		tracks []Track
+		err    error
+	}
 	var wg sync.WaitGroup
-	resCh := make(chan []Track, len(a.Services))
+	resCh := make(chan result, len(a.Services))
 	for _, svc := range a.Services {
 		svc := svc
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tracks, _ := svc.GetRecommendations(ctx, seedIDs)
-			resCh <- tracks
+			tracks, err := svc.GetRecommendations(ctx, seedIDs)
+			resCh <- result{tracks: tracks, err: err}
 		}()
 	}
 	wg.Wait()
 	close(resCh)
 	seen := make(map[string]struct{})
 	var merged []Track
+	var firstErr error
+	successes := 0
 	for r := range resCh {
-		for _, t := range r {
+		if r.err != nil {
+			if firstErr == nil {
+				firstErr = r.err
+			}
+			continue
+		}
+		successes++
+		for _, t := range r.tracks {
 			id := string(t.ID)
 			if _, ok := seen[id]; !ok {
 				seen[id] = struct{}{}
 				merged = append(merged, t)
 			}
 		}
+	}
+	if successes == 0 && firstErr != nil {
+		return nil, firstErr
 	}
 	return merged, nil
 }
