@@ -7,10 +7,12 @@
 package youtube
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	libspotify "github.com/zmb3/spotify"
 
@@ -18,6 +20,9 @@ import (
 )
 
 // Client provides access to the YouTube Data API.
+// Client provides access to the YouTube Data API. If Client is nil a default
+// instance with a 10 second timeout is used allowing the zero value to work
+// without additional setup.
 type Client struct {
 	Key    string
 	Client *http.Client
@@ -28,9 +33,9 @@ var _ music.Service = (*Client)(nil)
 
 // SearchTrack queries the YouTube search API and converts results into
 // music.Track values. Only the first page of results is returned.
-func (c *Client) SearchTrack(q string) ([]music.Track, error) {
+func (c *Client) SearchTrack(ctx context.Context, q string) ([]music.Track, error) {
 	if c.Client == nil {
-		c.Client = http.DefaultClient
+		c.Client = &http.Client{Timeout: 10 * time.Second}
 	}
 	u := "https://www.googleapis.com/youtube/v3/search"
 	params := url.Values{
@@ -40,7 +45,8 @@ func (c *Client) SearchTrack(q string) ([]music.Track, error) {
 		"q":          {q},
 		"key":        {c.Key},
 	}
-	resp, err := c.Client.Get(u + "?" + params.Encode())
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u+"?"+params.Encode(), nil)
+	resp, err := c.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -83,12 +89,12 @@ func (c *Client) SearchTrack(q string) ([]music.Track, error) {
 }
 
 // GetRecommendations fetches related videos for the given seed video ID.
-func (c *Client) GetRecommendations(seeds []string) ([]music.Track, error) {
+func (c *Client) GetRecommendations(ctx context.Context, seeds []string) ([]music.Track, error) {
 	if len(seeds) == 0 {
 		return nil, fmt.Errorf("no seed ids provided")
 	}
 	if c.Client == nil {
-		c.Client = http.DefaultClient
+		c.Client = &http.Client{Timeout: 10 * time.Second}
 	}
 	seed := seeds[0]
 	u := "https://www.googleapis.com/youtube/v3/search"
@@ -99,7 +105,8 @@ func (c *Client) GetRecommendations(seeds []string) ([]music.Track, error) {
 		"maxResults":       {"5"},
 		"key":              {c.Key},
 	}
-	resp, err := c.Client.Get(u + "?" + params.Encode())
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u+"?"+params.Encode(), nil)
+	resp, err := c.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}

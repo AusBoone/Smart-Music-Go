@@ -4,6 +4,7 @@ import (
 	"Smart-Music-Go/pkg/db"
 	"Smart-Music-Go/pkg/handlers"
 	"Smart-Music-Go/pkg/music"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -32,11 +33,11 @@ type fakeSearcher struct {
 	err    error
 }
 
-func (f fakeSearcher) SearchTrack(track string) ([]music.Track, error) {
+func (f fakeSearcher) SearchTrack(ctx context.Context, track string) ([]music.Track, error) {
 	return f.tracks, f.err
 }
 
-func (f fakeSearcher) GetRecommendations(seedIDs []string) ([]music.Track, error) {
+func (f fakeSearcher) GetRecommendations(ctx context.Context, seedIDs []string) ([]music.Track, error) {
 	return f.tracks, f.err
 }
 

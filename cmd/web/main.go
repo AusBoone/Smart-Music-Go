@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	libspotify "github.com/zmb3/spotify"
 
@@ -61,14 +62,14 @@ func main() {
 	var musicService music.Service = sc
 	switch os.Getenv("MUSIC_SERVICE") {
 	case "youtube":
-		musicService = &youtube.Client{Key: os.Getenv("YOUTUBE_API_KEY")}
+		musicService = &youtube.Client{Key: os.Getenv("YOUTUBE_API_KEY"), Client: &http.Client{Timeout: 10 * time.Second}}
 	case "soundcloud":
-		musicService = &soundcloud.Client{ClientID: os.Getenv("SOUNDCLOUD_CLIENT_ID")}
+		musicService = &soundcloud.Client{ClientID: os.Getenv("SOUNDCLOUD_CLIENT_ID"), HTTP: &http.Client{Timeout: 10 * time.Second}}
 	case "aggregate":
 		musicService = music.Aggregator{Services: []music.Service{
 			sc,
-			&youtube.Client{Key: os.Getenv("YOUTUBE_API_KEY")},
-			&soundcloud.Client{ClientID: os.Getenv("SOUNDCLOUD_CLIENT_ID")},
+			&youtube.Client{Key: os.Getenv("YOUTUBE_API_KEY"), Client: &http.Client{Timeout: 10 * time.Second}},
+			&soundcloud.Client{ClientID: os.Getenv("SOUNDCLOUD_CLIENT_ID"), HTTP: &http.Client{Timeout: 10 * time.Second}},
 		}}
 	}
 	// The authenticator handles the OAuth flow for user specific

@@ -38,6 +38,7 @@ go run cmd/web/main.go
 ```
 Visit `http://localhost:4000/login` to authenticate with Spotify then browse playlists or search for tracks. Favorites can be managed at `/favorites`.
 JSON responses are served from `/api/search`, `/api/playlists` and `/api/favorites` for use by the React frontend.
+For monthly summaries of your listening history call `/api/insights/monthly`. Collaborative playlists can be created via `/api/collections` and managed using the `/api/collections/{id}/tracks` and `/api/collections/{id}/users` endpoints.
 
 ## Docker
 A `Dockerfile` and `docker-compose.yml` are provided for local development. The
