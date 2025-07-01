@@ -16,10 +16,7 @@
 package handlers
 
 import (
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -34,7 +31,6 @@ import (
 
 	"Smart-Music-Go/pkg/db"
 	"Smart-Music-Go/pkg/music"
-	"Smart-Music-Go/pkg/spotify"
 )
 
 // Application struct holds dependencies for HTTP handlers.
@@ -46,39 +42,16 @@ type Application struct {
 
 	// SpotifyClient is optional and provides access to Spotify specific
 	// features such as audio analysis used for mood-based playlists.
-	SpotifyClient *spotify.SpotifyClient
+	// SpotifyClient exposes Spotify specific APIs used for advanced
+	// recommendations. Tests replace this with a lightweight mock.
+	SpotifyClient interface {
+		GetRecommendationsWithAttrs(ctx context.Context, seedIDs []string, attrs *libspotify.TrackAttributes) ([]music.Track, error)
+		GetAudioFeatures(ids ...string) ([]*libspotify.AudioFeatures, error)
+	}
 
 	Authenticator libspotify.Authenticator
 	DB            *db.DB
 	SignKey       []byte
-}
-
-// signValue computes an HMAC signature of value using key and returns
-// the value with the signature appended as value|base64url(sig).
-func signValue(value string, key []byte) string {
-	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(value))
-	sig := mac.Sum(nil)
-	return value + "|" + base64.RawURLEncoding.EncodeToString(sig)
-}
-
-// verifyValue validates signed using key and returns the original value.
-func verifyValue(signed string, key []byte) (string, bool) {
-	parts := strings.Split(signed, "|")
-	if len(parts) != 2 {
-		return "", false
-	}
-	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(parts[0]))
-	expected := mac.Sum(nil)
-	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return "", false
-	}
-	if !hmac.Equal(expected, sig) {
-		return "", false
-	}
-	return parts[0], true
 }
 
 // Home renders the landing page.  It shows the search form where users can
@@ -320,110 +293,6 @@ func (app *Application) RecommendationsJSON(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(tracks)
 }
 
-// decodeToken converts the cookie stored token back into an oauth2.Token. It
-// expects the cookie value to be base64 encoded JSON.
-func decodeToken(v string) (*oauth2.Token, error) {
-	// Decode the base64 encoded string stored in the cookie back into the
-	// JSON representation of the token.
-	data, err := base64.StdEncoding.DecodeString(v)
-	if err != nil {
-		return nil, err
-	}
-	// Unmarshal the JSON into the oauth2.Token struct.
-	var t oauth2.Token
-	if err := json.Unmarshal(data, &t); err != nil {
-		return nil, err
-	}
-	return &t, nil
-}
-
-// encodeToken signs and encodes the oauth2 token for storage in a cookie.
-func (app *Application) encodeToken(t *oauth2.Token, secure bool) *http.Cookie {
-	b, _ := json.Marshal(t)
-	return &http.Cookie{
-		Name:     "spotify_token",
-		Value:    signValue(base64.StdEncoding.EncodeToString(b), app.SignKey),
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   secure,
-	}
-}
-
-// refreshIfExpired checks the token expiry and, if needed, refreshes it using
-// the authenticator. The new token is saved to the DB and written back to the
-// spotify_token cookie.
-func (app *Application) refreshIfExpired(w http.ResponseWriter, r *http.Request, userID string, t *oauth2.Token) (*oauth2.Token, error) {
-	if t == nil || t.Valid() || t.RefreshToken == "" {
-		return t, nil
-	}
-	client := app.Authenticator.NewClient(t)
-	newTok, err := client.Token()
-	if err != nil {
-		return t, err
-	}
-	if app.DB != nil && userID != "" {
-		app.DB.SaveToken(userID, newTok)
-	}
-	http.SetCookie(w, app.encodeToken(newTok, r.TLS != nil))
-	return newTok, nil
-}
-
-// Login begins the OAuth flow by redirecting the user to Spotify's
-// authorization page.  The ResponseWriter and Request come from net/http.
-func (app *Application) Login(w http.ResponseWriter, r *http.Request) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		http.Error(w, "failed to generate state", http.StatusInternalServerError)
-		return
-	}
-	state := base64.RawURLEncoding.EncodeToString(b)
-	http.SetCookie(w, &http.Cookie{
-		Name:     "oauth_state",
-		Value:    signValue(state, app.SignKey),
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   r.TLS != nil,
-	})
-	http.Redirect(w, r, app.Authenticator.AuthURL(state), http.StatusFound)
-}
-
-// OAuthCallback completes the OAuth flow.  It exchanges the authorization code
-// for a token and stores it in secure cookies.
-func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
-	// Retrieve and verify the state cookie to protect against CSRF attacks.
-	c, err := r.Cookie("oauth_state")
-	if err != nil {
-		http.Error(w, "state mismatch", http.StatusBadRequest)
-		return
-	}
-	state, ok := verifyValue(c.Value, app.SignKey)
-	if !ok || r.URL.Query().Get("state") != state {
-		http.Error(w, "state mismatch", http.StatusBadRequest)
-		return
-	}
-	// Delete the state cookie as it is no longer needed.
-	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Path: "/", MaxAge: -1})
-
-	// Exchange the authorization code for an access token.
-	token, err := app.Authenticator.Token(state, r)
-	if err != nil {
-		http.Error(w, "authentication failed", http.StatusInternalServerError)
-		return
-	}
-	// Look up the current Spotify user so we can persist their token.
-	client := app.Authenticator.NewClient(token)
-	user, err := client.CurrentUser()
-	if err == nil && app.DB != nil {
-		app.DB.SaveToken(user.ID, token)
-	}
-	// Store the token and user ID in cookies for later requests.
-	http.SetCookie(w, app.encodeToken(token, r.TLS != nil))
-	if user != nil {
-		http.SetCookie(w, &http.Cookie{Name: "spotify_user_id", Value: signValue(user.ID, app.SignKey), Path: "/"})
-	}
-	http.Redirect(w, r, "/", http.StatusFound)
-}
-
 // Playlists renders an HTML page listing the logged-in user's playlists. It
 // requires a valid authentication cookie.
 func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
@@ -515,108 +384,6 @@ func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
 
 // AddFavorite accepts a JSON payload describing a track and stores it in the
 // logged-in user's favorites list.
-func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
-	// Identify the current user via the signed ID stored in a cookie.
-	// We verify the signature to ensure the value was not tampered with
-	// client-side.
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	var req struct {
-		TrackID    string `json:"track_id"`
-		TrackName  string `json:"track_name"`
-		ArtistName string `json:"artist_name"`
-	}
-	// Decode the JSON payload describing the track to favorite.
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
-		return
-	}
-	if app.DB == nil {
-		http.Error(w, "db not configured", http.StatusInternalServerError)
-		return
-	}
-	// Store the favorite in the database keyed by the verified user ID.
-	if err := app.DB.AddFavorite(userCookie.Value, req.TrackID, req.TrackName, req.ArtistName); err != nil {
-		http.Error(w, "failed to save favorite", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusCreated)
-}
-
-// Favorites renders an HTML page listing tracks the user has saved as
-// favorites.
-func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
-	// Obtain the user ID from the cookie so we can query their favorites.
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if app.DB == nil {
-		http.Error(w, "db not configured", http.StatusInternalServerError)
-		return
-	}
-	// Look up the user's favorites from the database.
-	favs, err := app.DB.ListFavorites(userCookie.Value)
-	if err != nil {
-		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
-		return
-	}
-	// Load the HTML template that displays the favorites.
-	tmpl, err := template.ParseFiles("ui/templates/favorites.html")
-	if err != nil {
-		http.Error(w, "template error", http.StatusInternalServerError)
-		return
-	}
-	if err := tmpl.Execute(w, favs); err != nil {
-		log.Printf("favorites template execute: %v", err)
-		http.Error(w, "render error", http.StatusInternalServerError)
-	}
-}
-
-// FavoritesJSON serves the /api/favorites endpoint and returns the favorites
-// as JSON.
-func (app *Application) FavoritesJSON(w http.ResponseWriter, r *http.Request) {
-	// Authenticate and find the user's favorites, returning them as JSON.
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if app.DB == nil {
-		http.Error(w, "db not configured", http.StatusInternalServerError)
-		return
-	}
-	favs, err := app.DB.ListFavorites(userCookie.Value)
-	if err != nil {
-		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(favs)
-}
-
 // AddHistoryJSON records that a track was played. It expects a JSON body with
 // track_id and artist_name fields. The current timestamp is stored.
 func (app *Application) AddHistoryJSON(w http.ResponseWriter, r *http.Request) {
@@ -648,100 +415,6 @@ func (app *Application) AddHistoryJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-}
-
-// InsightsJSON returns the most played artists for the current week.
-func (app *Application) InsightsJSON(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if app.DB == nil {
-		http.Error(w, "db not configured", http.StatusInternalServerError)
-		return
-	}
-	since := time.Now().AddDate(0, 0, -7)
-	res, err := app.DB.TopArtistsSince(userCookie.Value, since)
-	if err != nil {
-		http.Error(w, "failed to load insights", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
-}
-
-// InsightsTracksJSON returns the most played tracks for the last week. The number
-// of days can be customised via the 'days' query parameter.
-func (app *Application) InsightsTracksJSON(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if app.DB == nil {
-		http.Error(w, "db not configured", http.StatusInternalServerError)
-		return
-	}
-	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
-	if days <= 0 {
-		days = 7
-	}
-	since := time.Now().AddDate(0, 0, -days)
-	res, err := app.DB.TopTracksSince(userCookie.Value, since)
-	if err != nil {
-		http.Error(w, "failed to load insights", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
-}
-
-// InsightsMonthlyJSON returns playback counts grouped by month. The optional
-// 'since' query parameter accepts a YYYY-MM-DD date from which to start the
-// aggregation; defaults to one year ago.
-func (app *Application) InsightsMonthlyJSON(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if app.DB == nil {
-		http.Error(w, "db not configured", http.StatusInternalServerError)
-		return
-	}
-	sinceStr := r.URL.Query().Get("since")
-	since := time.Now().AddDate(-1, 0, 0)
-	if sinceStr != "" {
-		if t, err := time.Parse("2006-01-02", sinceStr); err == nil {
-			since = t
-		}
-	}
-	res, err := app.DB.MonthlyPlayCountsSince(userCookie.Value, since)
-	if err != nil {
-		http.Error(w, "failed to load insights", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
 }
 
 // CreateCollectionJSON starts a new collaborative playlist owned by the user.

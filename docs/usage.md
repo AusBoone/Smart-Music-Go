@@ -39,6 +39,8 @@ go run cmd/web/main.go
 Visit `http://localhost:4000/login` to authenticate with Spotify then browse playlists or search for tracks. Favorites can be managed at `/favorites`.
 JSON responses are served from `/api/search`, `/api/playlists` and `/api/favorites` for use by the React frontend.
 For monthly summaries of your listening history call `/api/insights/monthly`. Collaborative playlists can be created via `/api/collections` and managed using the `/api/collections/{id}/tracks` and `/api/collections/{id}/users` endpoints.
+Mood based recommendations are available via `/api/recommendations/mood?track_id=<id>` when a Spotify client is configured. Advanced filtering of energy and valence can be accessed through `/api/recommendations/advanced` with query parameters like `min_energy`.
+To search across Spotify, YouTube and SoundCloud simultaneously set `MUSIC_SERVICE=aggregate` in your environment and provide the respective API keys.
 
 ## Docker
 A `Dockerfile` and `docker-compose.yml` are provided for local development. The
@@ -53,3 +55,11 @@ To start with Docker Compose (persists the SQLite database to `./data`):
 ```bash
 docker compose up --build
 ```
+
+## Frontend Tests
+The React application is tested using Playwright. From `ui/frontend` run:
+```bash
+npm install
+npx playwright test
+```
+The tests assume the development server is running on port 4173 via `npm run preview` as configured in `playwright.config.cjs`.

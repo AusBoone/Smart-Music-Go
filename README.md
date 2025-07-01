@@ -68,6 +68,8 @@ Additional endpoints provide listening insights and collaborative playlist featu
 ```
 curl http://localhost:4000/api/insights/monthly
 curl -X POST http://localhost:4000/api/collections
+curl http://localhost:4000/api/recommendations/mood?track_id=123
+curl "http://localhost:4000/api/recommendations/advanced?track_id=123&min_energy=0.5"
 ```
 
 
@@ -155,7 +157,6 @@ Smart-Music-Go aims to evolve beyond a basic Spotify interface. Planned improvem
 - **Listening insights** now provide top artists and top tracks over a chosen period.
 - **Monthly summaries** group your listening history by month for trend analysis.
 - **Collaborative playlists** APIs allow creating collections that multiple users can populate.
-- **Collaborative playlists** so users can share favorites and create collections together.
 - **Personal listening insights** stored in SQLite to highlight trends and weekly discoveries.
 - **Enhanced UI/UX** with theme switching and audio previews in the React frontend.
 

@@ -14,6 +14,7 @@ Thank you for considering contributing to Smart-Music-Go! The following guidelin
   go test ./...
   ```
 - For frontend changes run `npm run build` so that `ui/frontend/dist` is updated.
+- Continuous integration runs the same checks in `.github/workflows/ci.yml` when you open a pull request.
 
 ## Pull Requests
 1. Create a feature branch for your change.

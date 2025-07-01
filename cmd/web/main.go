@@ -60,16 +60,30 @@ func main() {
 		log.Fatalf("spotify client init: %v", err)
 	}
 	var musicService music.Service = sc
-	switch os.Getenv("MUSIC_SERVICE") {
+	svc := os.Getenv("MUSIC_SERVICE")
+	switch svc {
 	case "youtube":
-		musicService = &youtube.Client{Key: os.Getenv("YOUTUBE_API_KEY"), Client: &http.Client{Timeout: 10 * time.Second}}
+		key := os.Getenv("YOUTUBE_API_KEY")
+		if key == "" {
+			log.Fatal("YOUTUBE_API_KEY must be set when MUSIC_SERVICE=youtube")
+		}
+		musicService = &youtube.Client{Key: key, Client: &http.Client{Timeout: 10 * time.Second}}
 	case "soundcloud":
-		musicService = &soundcloud.Client{ClientID: os.Getenv("SOUNDCLOUD_CLIENT_ID"), HTTP: &http.Client{Timeout: 10 * time.Second}}
+		id := os.Getenv("SOUNDCLOUD_CLIENT_ID")
+		if id == "" {
+			log.Fatal("SOUNDCLOUD_CLIENT_ID must be set when MUSIC_SERVICE=soundcloud")
+		}
+		musicService = &soundcloud.Client{ClientID: id, HTTP: &http.Client{Timeout: 10 * time.Second}}
 	case "aggregate":
+		yKey := os.Getenv("YOUTUBE_API_KEY")
+		scID := os.Getenv("SOUNDCLOUD_CLIENT_ID")
+		if yKey == "" || scID == "" {
+			log.Fatal("YOUTUBE_API_KEY and SOUNDCLOUD_CLIENT_ID must be set for aggregate service")
+		}
 		musicService = music.Aggregator{Services: []music.Service{
 			sc,
-			&youtube.Client{Key: os.Getenv("YOUTUBE_API_KEY"), Client: &http.Client{Timeout: 10 * time.Second}},
-			&soundcloud.Client{ClientID: os.Getenv("SOUNDCLOUD_CLIENT_ID"), HTTP: &http.Client{Timeout: 10 * time.Second}},
+			&youtube.Client{Key: yKey, Client: &http.Client{Timeout: 10 * time.Second}},
+			&soundcloud.Client{ClientID: scID, HTTP: &http.Client{Timeout: 10 * time.Second}},
 		}}
 	}
 	// The authenticator handles the OAuth flow for user specific

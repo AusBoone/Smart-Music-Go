@@ -1,0 +1,28 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      - name: Cache Go
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+      - name: Go fmt and test
+        run: |
+          gofmt -w $(git ls-files '*.go')
+          go test ./...
+      - name: Frontend dependencies
+        run: |
+          cd ui/frontend && npm install && npm run build && npx playwright install --with-deps
+      - name: Playwright tests
+        run: cd ui/frontend && npx playwright test
+        env:
+          CI: true
