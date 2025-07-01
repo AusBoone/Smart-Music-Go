@@ -28,6 +28,18 @@ type fakeSearcher struct {
 	err    error
 }
 
+// fakeSpotify implements the minimal subset of the Spotify client used by
+// RecommendationsAdvanced. It allows injecting predefined results without
+// hitting the real API during tests.
+type fakeSpotify struct {
+	tracks []music.Track
+	err    error
+}
+
+func (f fakeSpotify) GetAudioFeatures(ids ...string) ([]*libspotify.AudioFeatures, error) {
+	return nil, nil
+}
+
 var testKey = []byte("test-key")
 
 func (f fakeSearcher) SearchTrack(ctx context.Context, track string) ([]music.Track, error) {
@@ -35,6 +47,10 @@ func (f fakeSearcher) SearchTrack(ctx context.Context, track string) ([]music.Tr
 }
 
 func (f fakeSearcher) GetRecommendations(ctx context.Context, seedIDs []string) ([]music.Track, error) {
+	return f.tracks, f.err
+}
+
+func (f fakeSpotify) GetRecommendationsWithAttrs(ctx context.Context, seedIDs []string, attrs *libspotify.TrackAttributes) ([]music.Track, error) {
 	return f.tracks, f.err
 }
 
@@ -428,5 +444,72 @@ func TestAddHistoryAndCollections(t *testing.T) {
 	app.AddCollectionUserJSON(rr, userReq)
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("add user status %d", rr.Code)
+	}
+}
+
+// TestInsightsEndpoints verifies that the insights handlers return JSON summaries
+// from the database. It covers InsightsMonthlyJSON and InsightsTracksJSON with
+// a simple in-memory database populated with history entries.
+func TestInsightsEndpoints(t *testing.T) {
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Two history records in different months for aggregation
+	d.AddHistory("u", "1", "Artist", now)
+	d.AddHistory("u", "2", "Artist", now.AddDate(0, 1, 0))
+	app := &Application{DB: d, SignKey: testKey}
+
+	// Monthly endpoint
+	req := httptest.NewRequest(http.MethodGet, "/api/insights/monthly?since=2024-01-01", nil)
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr := httptest.NewRecorder()
+	app.InsightsMonthlyJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("monthly status %d", rr.Code)
+	}
+	var months []db.MonthCount
+	if err := json.NewDecoder(rr.Body).Decode(&months); err != nil {
+		t.Fatal(err)
+	}
+	if len(months) != 2 {
+		t.Fatalf("expected 2 months got %d", len(months))
+	}
+
+	// Tracks endpoint with custom days parameter
+	req = httptest.NewRequest(http.MethodGet, "/api/insights/tracks?days=800", nil)
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr = httptest.NewRecorder()
+	app.InsightsTracksJSON(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("tracks status %d", rr.Code)
+	}
+	var tracks []db.TrackCount
+	if err := json.NewDecoder(rr.Body).Decode(&tracks); err != nil {
+		t.Fatal(err)
+	}
+	if len(tracks) != 2 {
+		t.Fatalf("expected 2 track counts got %d", len(tracks))
+	}
+}
+
+// TestRecommendationsAdvanced checks that advanced recommendations honour query
+// parameters and return the Spotify client's result.
+func TestRecommendationsAdvanced(t *testing.T) {
+	fs := fakeSpotify{tracks: []music.Track{{SimpleTrack: libspotify.SimpleTrack{ID: "1"}}}}
+	app := &Application{SpotifyClient: fs, SignKey: testKey}
+	req := httptest.NewRequest(http.MethodGet, "/api/recommendations/advanced?track_id=1&min_energy=0.5", nil)
+	rr := httptest.NewRecorder()
+	app.RecommendationsAdvanced(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d", rr.Code)
+	}
+	var res []music.Track
+	if err := json.NewDecoder(rr.Body).Decode(&res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res) != 1 || string(res[0].ID) != "1" {
+		t.Fatalf("unexpected response %+v", res)
 	}
 }
