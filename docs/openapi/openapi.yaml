@@ -1,0 +1,95 @@
+openapi: 3.0.3
+info:
+  title: Smart Music Go API
+  version: 1.0.0
+  description: |
+    This OpenAPI specification documents the HTTP endpoints exposed by the
+    Smart Music Go server. It is generated based on docs/api.md.
+servers:
+  - url: http://localhost:4000
+paths:
+  /api/search:
+    get:
+      summary: Search tracks across services
+      parameters:
+        - in: query
+          name: track
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: Successful search
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Track'
+        '404':
+          description: No tracks found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/recommendations:
+    get:
+      summary: Get recommendations based on a track
+      parameters:
+        - in: query
+          name: track_id
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: Recommendation results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Track'
+        '400':
+          description: Missing track_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/playlists:
+    get:
+      summary: List user playlists
+      responses:
+        '200':
+          description: List of playlists
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    Track:
+      type: object
+      properties:
+        ID:
+          type: string
+        Name:
+          type: string
+        Artists:
+          type: array
+          items:
+            type: object
+            properties:
+              Name:
+                type: string
+    Error:
+      type: object
+      properties:
+        error:
+          type: string

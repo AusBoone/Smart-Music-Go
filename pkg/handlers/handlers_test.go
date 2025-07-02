@@ -188,7 +188,7 @@ func TestFavoritesJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	if err := d.AddFavorite("u", "1", "Song", "Artist"); err != nil {
+	if err := d.AddFavorite(context.Background(), "u", "1", "Song", "Artist"); err != nil {
 		t.Fatal(err)
 	}
 	app := &Application{DB: d, SignKey: testKey}
@@ -336,7 +336,7 @@ func TestPlaylistsJSONFromDB(t *testing.T) {
 	}
 	defer d.Close()
 	tok := &oauth2.Token{AccessToken: "abc", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour)}
-	if err := d.SaveToken("u", tok); err != nil {
+	if err := d.SaveToken(context.Background(), "u", tok); err != nil {
 		t.Fatal(err)
 	}
 	auth := libspotify.NewAuthenticator("http://example.com/callback")
@@ -369,7 +369,7 @@ func TestPlaylistsJSONRefresh(t *testing.T) {
 	}
 	defer d.Close()
 	expired := &oauth2.Token{AccessToken: "old", RefreshToken: "ref", TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour)}
-	if err := d.SaveToken("u", expired); err != nil {
+	if err := d.SaveToken(context.Background(), "u", expired); err != nil {
 		t.Fatal(err)
 	}
 	auth := libspotify.NewAuthenticator("http://example.com/callback")
@@ -385,7 +385,7 @@ func TestPlaylistsJSONRefresh(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rr.Code)
 	}
-	tok, err := d.GetToken("u")
+	tok, err := d.GetToken(context.Background(), "u")
 	if err != nil || tok.AccessToken != "new" {
 		t.Fatalf("token not refreshed: %+v %v", tok, err)
 	}
@@ -417,7 +417,7 @@ func TestSearchJSONRefresh(t *testing.T) {
 	}
 	defer d.Close()
 	expired := &oauth2.Token{AccessToken: "old", RefreshToken: "ref", TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour)}
-	if err := d.SaveToken("u", expired); err != nil {
+	if err := d.SaveToken(context.Background(), "u", expired); err != nil {
 		t.Fatal(err)
 	}
 	fs := fakeSearcher{tracks: []music.Track{{SimpleTrack: libspotify.SimpleTrack{Name: "Song"}}}}
@@ -437,7 +437,7 @@ func TestSearchJSONRefresh(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 got %d", rr.Code)
 	}
-	tok, _ := d.GetToken("u")
+	tok, _ := d.GetToken(context.Background(), "u")
 	if tok.AccessToken != "new" {
 		t.Errorf("token not refreshed in db")
 	}
@@ -461,7 +461,7 @@ func TestAddHistoryAndCollections(t *testing.T) {
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("expected 201 got %d", rr.Code)
 	}
-	counts, _ := d.TopTracksSince("u", time.Now().Add(-time.Hour))
+	counts, _ := d.TopTracksSince(context.Background(), "u", time.Now().Add(-time.Hour))
 	if len(counts) != 1 || counts[0].TrackID != "1" {
 		t.Fatalf("history not recorded: %+v", counts)
 	}
@@ -486,7 +486,7 @@ func TestAddHistoryAndCollections(t *testing.T) {
 		t.Fatalf("add track status %d", rr.Code)
 	}
 
-	tracks, _ := d.ListCollectionTracks(colID)
+	tracks, _ := d.ListCollectionTracks(context.Background(), colID)
 	if len(tracks) != 1 || tracks[0].TrackID != "1" {
 		t.Fatalf("track not stored: %+v", tracks)
 	}
@@ -510,8 +510,8 @@ func TestInsightsEndpoints(t *testing.T) {
 	}
 	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	// Two history records in different months for aggregation
-	d.AddHistory("u", "1", "Artist", now)
-	d.AddHistory("u", "2", "Artist", now.AddDate(0, 1, 0))
+	d.AddHistory(context.Background(), "u", "1", "Artist", now)
+	d.AddHistory(context.Background(), "u", "2", "Artist", now.AddDate(0, 1, 0))
 	app := &Application{DB: d, SignKey: testKey}
 
 	// Monthly endpoint

@@ -1,55 +1,67 @@
 // Search lets the user query tracks via the server API and mark them as
 // favorites. Returned tracks are displayed using the "card" style with a
 // subtle fade-in animation defined in the global CSS.
-import { useState } from 'react'
+import { useState } from "react";
 
-function Search({ theme }) {
+interface Track {
+  ID: string;
+  Name: string;
+  Artists: { Name: string }[];
+  Album?: { Images?: { URL: string }[] };
+  PreviewURL?: string;
+}
+
+interface Props {
+  theme: string;
+}
+
+function Search({ theme }: Props): JSX.Element {
   // Query string entered by the user.
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState<string>("");
   // Array of tracks returned from the API.
-  const [results, setResults] = useState([])
+  const [results, setResults] = useState<Track[]>([]);
   // Error message to display if the search fails.
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string>("");
   // Indicates the search request is in progress.
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState<boolean>(false);
 
   const handleSearch = async () => {
     // Skip searching if the input is empty.
-    if (!query) return
+    if (!query) return;
     try {
-      setLoading(true)
-      const res = await fetch(`/api/search?track=${encodeURIComponent(query)}`)
+      setLoading(true);
+      const res = await fetch(`/api/search?track=${encodeURIComponent(query)}`);
       if (!res.ok) {
         // Attempt to read an error message from the response.
-        const data = await res.json().catch(() => ({}))
-        setError(data.error || 'Search failed')
-        setResults([])
-        setLoading(false)
-        return
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Search failed");
+        setResults([]);
+        setLoading(false);
+        return;
       }
-      const data = await res.json()
-      setResults(data)
-      setError('')
-      setLoading(false)
+      const data = await res.json();
+      setResults(data);
+      setError("");
+      setLoading(false);
     } catch {
-      setError('Search failed')
-      setResults([])
-      setLoading(false)
+      setError("Search failed");
+      setResults([]);
+      setLoading(false);
     }
-  }
+  };
 
-  const addFav = async (t) => {
+  const addFav = async (t: Track) => {
     // Send the selected track to the server to be stored as a favorite.
-    await fetch('/favorites', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    await fetch("/favorites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         track_id: t.ID,
         track_name: t.Name,
         artist_name: t.Artists[0]?.Name,
       }),
-    })
-  }
+    });
+  };
 
   return (
     <div className={theme}>
@@ -83,7 +95,7 @@ function Search({ theme }) {
         ))}
       </div>
     </div>
-  )
+  );
 }
 
-export default Search
+export default Search;

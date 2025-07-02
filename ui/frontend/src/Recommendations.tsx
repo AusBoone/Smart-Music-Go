@@ -2,12 +2,19 @@
 // Results are presented with the animated card component for a modern look.
 import { useState } from "react";
 
-function Recommendations() {
-  const [trackID, setTrackID] = useState("");
-  const [results, setResults] = useState([]);
-  const [error, setError] = useState("");
+interface Track {
+  ID: string;
+  Name: string;
+  Artists: { Name: string }[];
+  Album?: { Images?: { URL: string }[] };
+}
+
+function Recommendations(): JSX.Element {
+  const [trackID, setTrackID] = useState<string>("");
+  const [results, setResults] = useState<Track[]>([]);
+  const [error, setError] = useState<string>("");
   // Tracks whether the recommendation request is in progress.
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const fetchRecs = async () => {
     if (!trackID) return;
@@ -17,7 +24,8 @@ function Recommendations() {
         `/api/recommendations?track_id=${encodeURIComponent(trackID)}`,
       );
       if (!res.ok) {
-        setError("Failed to load recommendations");
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Failed to load recommendations");
         setResults([]);
         setLoading(false);
         return;

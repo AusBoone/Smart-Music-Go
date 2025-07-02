@@ -1,6 +1,6 @@
 /*
  * index.css defines base styling and CSS variables for the React UI.
- * It is imported once in main.jsx and applies to every component.
+ * It is imported once in main.tsx and applies to every component.
  * Colors, fonts and global animations are centralized here so
  * individual components remain lightweight.
  */
@@ -40,7 +40,9 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   padding: 1rem;
-  transition: transform 0.3s, box-shadow 0.3s;
+  transition:
+    transform 0.3s,
+    box-shadow 0.3s;
 }
 
 /* Light mode overrides using the variables defined above. */

@@ -4,12 +4,20 @@
 // cards reuse the same animated styling as the main search view.
 import { useState } from "react";
 
-function Mood() {
-  const [trackID, setTrackID] = useState("");
-  const [results, setResults] = useState([]);
-  const [error, setError] = useState("");
+// Track mirrors the subset of fields needed for display.
+interface Track {
+  ID: string;
+  Name: string;
+  Artists: { Name: string }[];
+  Album?: { Images?: { URL: string }[] };
+}
+
+function Mood(): JSX.Element {
+  const [trackID, setTrackID] = useState<string>("");
+  const [results, setResults] = useState<Track[]>([]);
+  const [error, setError] = useState<string>("");
   // Indicates a request is in flight.
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const fetchMood = async () => {
     if (!trackID) return;

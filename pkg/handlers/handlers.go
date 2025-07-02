@@ -20,8 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -77,7 +77,7 @@ func (app *Application) Home(w http.ResponseWriter, r *http.Request) {
 	if err := tmpl.Execute(w, nil); err != nil {
 		// Log the error but return a generic message to the client
 		// so we do not expose internal details.
-		log.Printf("home template execute: %v", err)
+		log.WithError(err).Error("home template execute")
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
 }
@@ -325,7 +325,7 @@ func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if token == nil && app.DB != nil {
-		if t, errTok := app.DB.GetToken(userCookie.Value); errTok == nil {
+		if t, errTok := app.DB.GetToken(r.Context(), userCookie.Value); errTok == nil {
 			token, _ = app.refreshIfExpired(w, r, userCookie.Value, t)
 		} else {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -374,7 +374,7 @@ func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if token == nil && app.DB != nil {
-		if t, errTok := app.DB.GetToken(userCookie.Value); errTok == nil {
+		if t, errTok := app.DB.GetToken(r.Context(), userCookie.Value); errTok == nil {
 			token, _ = app.refreshIfExpired(w, r, userCookie.Value, t)
 		} else {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -423,7 +423,7 @@ func (app *Application) AddHistoryJSON(w http.ResponseWriter, r *http.Request) {
 		respondJSONError(w, http.StatusBadRequest, "track_id and artist_name are required")
 		return
 	}
-	if err := app.DB.AddHistory(userCookie.Value, req.TrackID, req.ArtistName, time.Now()); err != nil {
+	if err := app.DB.AddHistory(r.Context(), userCookie.Value, req.TrackID, req.ArtistName, time.Now()); err != nil {
 		http.Error(w, "failed to save history", http.StatusInternalServerError)
 		return
 	}
@@ -447,7 +447,7 @@ func (app *Application) CreateCollectionJSON(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	id, err := app.DB.CreateCollection(userCookie.Value)
+	id, err := app.DB.CreateCollection(r.Context(), userCookie.Value)
 	if err != nil {
 		http.Error(w, "failed to create collection", http.StatusInternalServerError)
 		return
@@ -492,7 +492,7 @@ func (app *Application) AddCollectionTrackJSON(w http.ResponseWriter, r *http.Re
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	if err := app.DB.AddTrackToCollection(colID, req.TrackID, req.TrackName, req.ArtistName); err != nil {
+	if err := app.DB.AddTrackToCollection(r.Context(), colID, req.TrackID, req.TrackName, req.ArtistName); err != nil {
 		http.Error(w, "failed to add track", http.StatusInternalServerError)
 		return
 	}
@@ -534,7 +534,7 @@ func (app *Application) AddCollectionUserJSON(w http.ResponseWriter, r *http.Req
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	if err := app.DB.AddUserToCollection(colID, req.UserID); err != nil {
+	if err := app.DB.AddUserToCollection(r.Context(), colID, req.UserID); err != nil {
 		http.Error(w, "failed to add user", http.StatusInternalServerError)
 		return
 	}
@@ -553,7 +553,7 @@ func (app *Application) ListCollectionTracksJSON(w http.ResponseWriter, r *http.
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	tracks, err := app.DB.ListCollectionTracks(colID)
+	tracks, err := app.DB.ListCollectionTracks(r.Context(), colID)
 	if err != nil {
 		http.Error(w, "failed to list tracks", http.StatusInternalServerError)
 		return

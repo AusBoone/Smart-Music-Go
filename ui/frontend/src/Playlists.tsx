@@ -1,25 +1,31 @@
 // Playlists fetches and displays the current user's Spotify playlists.
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 
-function Playlists() {
+// Playlist represents the minimal fields returned by the backend API.
+interface Playlist {
+  ID: string;
+  Name: string;
+}
+
+function Playlists(): JSX.Element {
   // Array of playlists returned from the API.
-  const [playlists, setPlaylists] = useState([])
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   // Holds an error message when loading fails.
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string>("");
   // Loading indicator while playlists are fetched.
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     // Fetch the user's playlists on component mount.
-    fetch('/api/playlists')
+    fetch("/api/playlists")
       .then((res) => {
-        if (!res.ok) throw new Error('failed')
-        return res.json()
+        if (!res.ok) throw new Error("failed");
+        return res.json();
       })
       .then((data) => setPlaylists(data.Playlists || []))
-      .catch(() => setError('Failed to load playlists'))
-      .finally(() => setLoading(false))
-  }, [])
+      .catch(() => setError("Failed to load playlists"))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div>
@@ -36,7 +42,7 @@ function Playlists() {
         ))}
       </ul>
     </div>
-  )
+  );
 }
 
-export default Playlists
+export default Playlists;

@@ -8,6 +8,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -54,23 +55,23 @@ func New(path string) (*DB, error) {
 
 // SaveToken persists the OAuth token for the given userID.  If a token
 // already exists it is replaced.
-func (db *DB) SaveToken(userID string, token *oauth2.Token) error {
+func (db *DB) SaveToken(ctx context.Context, userID string, token *oauth2.Token) error {
 	// Serialize the oauth2 token to JSON before storing it.
 	b, err := json.Marshal(token)
 	if err != nil {
 		return err
 	}
 	// Upsert the token so subsequent logins replace any existing value.
-	_, err = db.Exec(`INSERT INTO tokens(user_id, token) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET token=excluded.token`, userID, string(b))
+	_, err = db.ExecContext(ctx, `INSERT INTO tokens(user_id, token) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET token=excluded.token`, userID, string(b))
 	return err
 }
 
 // GetToken retrieves the OAuth token stored for userID and unmarshals it
 // from JSON.  The returned token includes the refresh token if one was
 // originally saved.
-func (db *DB) GetToken(userID string) (*oauth2.Token, error) {
+func (db *DB) GetToken(ctx context.Context, userID string) (*oauth2.Token, error) {
 	var data string
-	if err := db.QueryRow(`SELECT token FROM tokens WHERE user_id=?`, userID).Scan(&data); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT token FROM tokens WHERE user_id=?`, userID).Scan(&data); err != nil {
 		return nil, err
 	}
 	var tok oauth2.Token
@@ -83,11 +84,11 @@ func (db *DB) GetToken(userID string) (*oauth2.Token, error) {
 // AddFavorite inserts a track into the favorites table for userID. The
 // trackID, trackName and artistName parameters correspond to the
 // Spotify track information being saved.
-func (db *DB) AddFavorite(userID, trackID, trackName, artistName string) error {
+func (db *DB) AddFavorite(ctx context.Context, userID, trackID, trackName, artistName string) error {
 	// Insert the favorite using the supplied track metadata. The ID is
 	// auto-incremented so we only store the user association and track
 	// details.
-	_, err := db.Exec(`INSERT INTO favorites(user_id, track_id, track_name, artist_name) VALUES(?, ?, ?, ?)`, userID, trackID, trackName, artistName)
+	_, err := db.ExecContext(ctx, `INSERT INTO favorites(user_id, track_id, track_name, artist_name) VALUES(?, ?, ?, ?)`, userID, trackID, trackName, artistName)
 	return err
 }
 
@@ -101,9 +102,9 @@ type Favorite struct {
 // ListFavorites retrieves all favorites stored for the provided userID.
 // Results are returned in reverse insertion order so the most recently
 // saved tracks appear first.
-func (db *DB) ListFavorites(userID string) ([]Favorite, error) {
+func (db *DB) ListFavorites(ctx context.Context, userID string) ([]Favorite, error) {
 	// Query all favorites for the given user ordered by insertion time.
-	rows, err := db.Query(`SELECT track_id, track_name, artist_name FROM favorites WHERE user_id=? ORDER BY id DESC`, userID)
+	rows, err := db.QueryContext(ctx, `SELECT track_id, track_name, artist_name FROM favorites WHERE user_id=? ORDER BY id DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,8 +124,8 @@ func (db *DB) ListFavorites(userID string) ([]Favorite, error) {
 
 // AddHistory inserts a listening event for the given user. playedAt should be
 // the time the track was played and is stored as a timestamp.
-func (db *DB) AddHistory(userID, trackID, artistName string, playedAt time.Time) error {
-	_, err := db.Exec(`INSERT INTO history(user_id, track_id, artist_name, played_at) VALUES(?,?,?,?)`, userID, trackID, artistName, playedAt)
+func (db *DB) AddHistory(ctx context.Context, userID, trackID, artistName string, playedAt time.Time) error {
+	_, err := db.ExecContext(ctx, `INSERT INTO history(user_id, track_id, artist_name, played_at) VALUES(?,?,?,?)`, userID, trackID, artistName, playedAt)
 	return err
 }
 
@@ -135,8 +136,8 @@ type ArtistCount struct {
 }
 
 // TopArtistsSince returns the most played artists since the provided time.
-func (db *DB) TopArtistsSince(userID string, since time.Time) ([]ArtistCount, error) {
-	rows, err := db.Query(`SELECT artist_name, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY artist_name ORDER BY c DESC`, userID, since)
+func (db *DB) TopArtistsSince(ctx context.Context, userID string, since time.Time) ([]ArtistCount, error) {
+	rows, err := db.QueryContext(ctx, `SELECT artist_name, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY artist_name ORDER BY c DESC`, userID, since)
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +160,8 @@ type TrackCount struct {
 }
 
 // TopTracksSince returns the most played tracks since the given time.
-func (db *DB) TopTracksSince(userID string, since time.Time) ([]TrackCount, error) {
-	rows, err := db.Query(`SELECT track_id, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY track_id ORDER BY c DESC`, userID, since)
+func (db *DB) TopTracksSince(ctx context.Context, userID string, since time.Time) ([]TrackCount, error) {
+	rows, err := db.QueryContext(ctx, `SELECT track_id, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY track_id ORDER BY c DESC`, userID, since)
 	if err != nil {
 		return nil, err
 	}
@@ -177,20 +178,20 @@ func (db *DB) TopTracksSince(userID string, since time.Time) ([]TrackCount, erro
 }
 
 // CreateCollection inserts a new collaborative playlist owned by the specified user.
-func (db *DB) CreateCollection(owner string) (string, error) {
+func (db *DB) CreateCollection(ctx context.Context, owner string) (string, error) {
 	id := fmt.Sprintf("c_%d", time.Now().UnixNano())
-	if _, err := db.Exec(`INSERT INTO collections(id, owner) VALUES(?, ?)`, id, owner); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO collections(id, owner) VALUES(?, ?)`, id, owner); err != nil {
 		return "", err
 	}
-	if _, err := db.Exec(`INSERT INTO collection_users(collection_id, user_id) VALUES(?, ?)`, id, owner); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO collection_users(collection_id, user_id) VALUES(?, ?)`, id, owner); err != nil {
 		return "", err
 	}
 	return id, nil
 }
 
 // AddTrackToCollection saves a track in the specified collection.
-func (db *DB) AddTrackToCollection(colID, trackID, trackName, artistName string) error {
-	_, err := db.Exec(`INSERT INTO collection_tracks(collection_id, track_id, track_name, artist_name) VALUES(?,?,?,?)`, colID, trackID, trackName, artistName)
+func (db *DB) AddTrackToCollection(ctx context.Context, colID, trackID, trackName, artistName string) error {
+	_, err := db.ExecContext(ctx, `INSERT INTO collection_tracks(collection_id, track_id, track_name, artist_name) VALUES(?,?,?,?)`, colID, trackID, trackName, artistName)
 	return err
 }
 
@@ -202,8 +203,8 @@ type CollectionTrack struct {
 }
 
 // ListCollectionTracks returns all tracks stored in the given collection.
-func (db *DB) ListCollectionTracks(colID string) ([]CollectionTrack, error) {
-	rows, err := db.Query(`SELECT track_id, track_name, artist_name FROM collection_tracks WHERE collection_id=?`, colID)
+func (db *DB) ListCollectionTracks(ctx context.Context, colID string) ([]CollectionTrack, error) {
+	rows, err := db.QueryContext(ctx, `SELECT track_id, track_name, artist_name FROM collection_tracks WHERE collection_id=?`, colID)
 	if err != nil {
 		return nil, err
 	}
@@ -222,8 +223,8 @@ func (db *DB) ListCollectionTracks(colID string) ([]CollectionTrack, error) {
 // AddUserToCollection grants access to an existing collection for a user.
 // It inserts a row into the collection_users table linking the user
 // to the playlist. Duplicate entries are ignored.
-func (db *DB) AddUserToCollection(colID, userID string) error {
-	_, err := db.Exec(`INSERT INTO collection_users(collection_id, user_id) SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM collection_users WHERE collection_id=? AND user_id=?)`, colID, userID, colID, userID)
+func (db *DB) AddUserToCollection(ctx context.Context, colID, userID string) error {
+	_, err := db.ExecContext(ctx, `INSERT INTO collection_users(collection_id, user_id) SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM collection_users WHERE collection_id=? AND user_id=?)`, colID, userID, colID, userID)
 	return err
 }
 
@@ -235,8 +236,8 @@ type MonthCount struct {
 
 // MonthlyPlayCountsSince aggregates listening history per month starting from
 // the provided time. Results are ordered chronologically.
-func (db *DB) MonthlyPlayCountsSince(userID string, since time.Time) ([]MonthCount, error) {
-	rows, err := db.Query(`SELECT strftime('%Y-%m', played_at) m, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY m ORDER BY m`, userID, since)
+func (db *DB) MonthlyPlayCountsSince(ctx context.Context, userID string, since time.Time) ([]MonthCount, error) {
+	rows, err := db.QueryContext(ctx, `SELECT strftime('%Y-%m', played_at) m, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY m ORDER BY m`, userID, since)
 	if err != nil {
 		return nil, err
 	}

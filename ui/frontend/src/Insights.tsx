@@ -1,9 +1,19 @@
 // Insights displays listening analytics for the logged in user.
 import { useEffect, useState } from "react";
 
-function Insights() {
-  const [artists, setArtists] = useState([]);
-  const [tracks, setTracks] = useState([]);
+interface ArtistCount {
+  Artist: string;
+  Count: number;
+}
+
+interface TrackCount {
+  TrackID: string;
+  Count: number;
+}
+
+function Insights(): JSX.Element {
+  const [artists, setArtists] = useState<ArtistCount[]>([]);
+  const [tracks, setTracks] = useState<TrackCount[]>([]);
 
   useEffect(() => {
     fetch("/api/insights")

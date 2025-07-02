@@ -143,9 +143,17 @@ Detailed guides for running the application, deploying to production and
 contributing can be found in the [docs](docs) directory:
 
 - [Usage](docs/usage.md) – running locally and configuring authentication
-- [Deployment](docs/deployment.md) – production deployment options
-- [Architecture](docs/architecture.md) – overview of packages and request flow
-- [Contributing](CONTRIBUTING.md)
+ - [Deployment](docs/deployment.md) – production deployment options
+ - [Architecture](docs/architecture.md) – overview of packages and request flow
+ - [Contributing](CONTRIBUTING.md)
+ - [OpenAPI Spec](docs/openapi/openapi.yaml) – machine readable API definition
+
+The OpenAPI file can be used with tools like `swagger-codegen` to generate client
+libraries or interactive documentation:
+
+```bash
+swagger-codegen generate -i docs/openapi/openapi.yaml -l html2 -o api-docs
+```
 
 
 

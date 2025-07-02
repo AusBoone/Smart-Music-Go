@@ -6,8 +6,8 @@ package handlers
 
 import (
 	"encoding/json"
+	log "github.com/sirupsen/logrus"
 	"html/template"
-	"log"
 	"net/http"
 )
 
@@ -42,7 +42,7 @@ func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	if err := app.DB.AddFavorite(userCookie.Value, req.TrackID, req.TrackName, req.ArtistName); err != nil {
+	if err := app.DB.AddFavorite(r.Context(), userCookie.Value, req.TrackID, req.TrackName, req.ArtistName); err != nil {
 		http.Error(w, "failed to save favorite", http.StatusInternalServerError)
 		return
 	}
@@ -67,7 +67,7 @@ func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	favs, err := app.DB.ListFavorites(userCookie.Value)
+	favs, err := app.DB.ListFavorites(r.Context(), userCookie.Value)
 	if err != nil {
 		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
 		return
@@ -78,7 +78,7 @@ func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := tmpl.Execute(w, favs); err != nil {
-		log.Printf("favorites template execute: %v", err)
+		log.WithError(err).Error("favorites template execute")
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
 }
@@ -101,7 +101,7 @@ func (app *Application) FavoritesJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	favs, err := app.DB.ListFavorites(userCookie.Value)
+	favs, err := app.DB.ListFavorites(r.Context(), userCookie.Value)
 	if err != nil {
 		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
 		return

@@ -16,7 +16,8 @@ import (
 // It is useful when the application wants to search across multiple
 // providers (e.g. Spotify and YouTube) simultaneously.
 type Aggregator struct {
-	Services []Service
+	Services      []Service
+	MaxConcurrent int
 }
 
 // SearchTrack returns the union of results from all underlying services.
@@ -32,12 +33,15 @@ func (a Aggregator) SearchTrack(ctx context.Context, q string) ([]Track, error) 
 	}
 	var wg sync.WaitGroup
 	resCh := make(chan result, len(a.Services))
+	sem := make(chan struct{}, a.concurrency())
 	for _, svc := range a.Services {
 		svc := svc
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			sem <- struct{}{}
 			tracks, err := svc.SearchTrack(ctx, q)
+			<-sem
 			resCh <- result{tracks: tracks, err: err}
 		}()
 	}
@@ -69,6 +73,15 @@ func (a Aggregator) SearchTrack(ctx context.Context, q string) ([]Track, error) 
 	return merged, nil
 }
 
+// concurrency returns the number of goroutines to use when querying services.
+// If MaxConcurrent is not set or less than 1, it defaults to the number of services.
+func (a Aggregator) concurrency() int {
+	if a.MaxConcurrent > 0 {
+		return a.MaxConcurrent
+	}
+	return len(a.Services)
+}
+
 // GetRecommendations merges recommendations from all services. Only the first
 // seed ID is passed through to providers that do not support multiple seeds.
 func (a Aggregator) GetRecommendations(ctx context.Context, seedIDs []string) ([]Track, error) {
@@ -81,12 +94,15 @@ func (a Aggregator) GetRecommendations(ctx context.Context, seedIDs []string) ([
 	}
 	var wg sync.WaitGroup
 	resCh := make(chan result, len(a.Services))
+	sem := make(chan struct{}, a.concurrency())
 	for _, svc := range a.Services {
 		svc := svc
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			sem <- struct{}{}
 			tracks, err := svc.GetRecommendations(ctx, seedIDs)
+			<-sem
 			resCh <- result{tracks: tracks, err: err}
 		}()
 	}
