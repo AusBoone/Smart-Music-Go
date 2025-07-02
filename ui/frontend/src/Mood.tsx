@@ -3,6 +3,7 @@
 // which uses Spotify audio features to build the playlist. Track
 // cards reuse the same animated styling as the main search view.
 import { useState } from "react";
+import { api } from "./api";
 
 // Track mirrors the subset of fields needed for display.
 interface Track {
@@ -23,21 +24,14 @@ function Mood(): JSX.Element {
     if (!trackID) return;
     try {
       setLoading(true);
-      const res = await fetch(
+      const data = await api<Track[]>(
         `/api/recommendations/mood?track_id=${encodeURIComponent(trackID)}`,
       );
-      if (!res.ok) {
-        setError("Failed to load recommendations");
-        setResults([]);
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
       setResults(data);
       setError("");
       setLoading(false);
-    } catch {
-      setError("Failed to load recommendations");
+    } catch (e: any) {
+      setError(e.message);
       setResults([]);
       setLoading(false);
     }

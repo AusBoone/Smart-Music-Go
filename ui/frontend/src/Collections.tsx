@@ -1,5 +1,6 @@
 // Collections lets the user create a shared playlist and view its tracks.
 import { useState } from "react";
+import { api } from "./api";
 
 interface CollectionTrack {
   TrackID: string;
@@ -14,15 +15,14 @@ function Collections(): JSX.Element {
   const [loading, setLoading] = useState<boolean>(false);
 
   const create = async () => {
-    const res = await fetch("/api/collections", { method: "POST" });
-    const data = await res.json();
+    const data = await api<{ id: string }>("/api/collections", { method: "POST" });
     setId(data.id);
   };
 
   const load = async () => {
     setLoading(true);
-    const res = await fetch(`/api/collections/${id}/tracks`);
-    setTracks(await res.json());
+    const data = await api<CollectionTrack[]>(`/api/collections/${id}/tracks`);
+    setTracks(data);
     setLoading(false);
   };
 

@@ -60,6 +60,41 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// TestEncodeTokenAttributes ensures cookies created by encodeToken include the
+// expected security attributes so the browser enforces them correctly.
+func TestEncodeTokenAttributes(t *testing.T) {
+	app := &Application{SignKey: testKey}
+	tok := &oauth2.Token{AccessToken: "a"}
+	c := app.encodeToken(tok, true)
+	if !c.Secure {
+		t.Errorf("Secure not set")
+	}
+	if c.SameSite != http.SameSiteLaxMode {
+		t.Errorf("SameSite not Lax")
+	}
+}
+
+// TestLoginCookieAttributes verifies the oauth_state cookie has secure options
+// when starting the OAuth flow.
+func TestLoginCookieAttributes(t *testing.T) {
+	app := &Application{Authenticator: libspotify.NewAuthenticator("http://example.com"), SignKey: testKey}
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	rr := httptest.NewRecorder()
+	app.Login(rr, req)
+	found := false
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == "oauth_state" {
+			found = true
+			if c.SameSite != http.SameSiteLaxMode {
+				t.Errorf("oauth_state cookie SameSite not set")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("oauth_state cookie not set")
+	}
+}
+
 // TestHome ensures the landing page renders successfully and includes
 // basic elements such as the welcome text and search form.
 func TestHome(t *testing.T) {

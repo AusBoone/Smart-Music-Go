@@ -1,6 +1,7 @@
 // Recommendations retrieves track suggestions based on a seed track ID.
 // Results are presented with the animated card component for a modern look.
 import { useState } from "react";
+import { api } from "./api";
 
 interface Track {
   ID: string;
@@ -20,22 +21,14 @@ function Recommendations(): JSX.Element {
     if (!trackID) return;
     try {
       setLoading(true);
-      const res = await fetch(
+      const data = await api<Track[]>(
         `/api/recommendations?track_id=${encodeURIComponent(trackID)}`,
       );
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Failed to load recommendations");
-        setResults([]);
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
       setResults(data);
       setError("");
       setLoading(false);
-    } catch {
-      setError("Failed to load recommendations");
+    } catch (e: any) {
+      setError(e.message);
       setResults([]);
       setLoading(false);
     }

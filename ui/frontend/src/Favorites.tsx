@@ -1,5 +1,6 @@
 // Favorites shows tracks that the user has previously marked as favorites.
 import { useEffect, useState } from "react";
+import { api } from "./api";
 
 // Favorite corresponds to a favorite track entry returned by the API.
 interface Favorite {
@@ -18,13 +19,9 @@ function Favorites(): JSX.Element {
 
   useEffect(() => {
     // Retrieve favorites once when the component mounts.
-    fetch("/api/favorites")
-      .then((res) => {
-        if (!res.ok) throw new Error("failed");
-        return res.json();
-      })
-      .then((data) => setFavs(data))
-      .catch(() => setError("Failed to load favorites"))
+    api<Favorite[]>("/api/favorites")
+      .then(setFavs)
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
 

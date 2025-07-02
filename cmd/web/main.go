@@ -1,7 +1,8 @@
 // Command web initializes the Smart-Music-Go application and starts the HTTP
 // server. Configuration is provided via environment variables for Spotify API
-// credentials and database location. The server listens on port 4000 and
-// serves both HTML pages and a JSON API. Recent additions include monthly
+// credentials and database location. The server listens on the port specified
+// by the PORT environment variable (default 4000) and serves both HTML pages and
+// a JSON API. Recent additions include monthly
 // insights and collaborative playlist routes.
 
 package main
@@ -167,9 +168,19 @@ func main() {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./ui/static"))))
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir("./ui/frontend/dist"))))
 
+	// Determine the port to listen on. PORT may be set by the environment
+	// (for example on cloud platforms). A leading colon is optional.
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "4000"
+	}
+	if !strings.HasPrefix(port, ":") {
+		port = ":" + port
+	}
+
 	// Finally start the HTTP server. ListenAndServe blocks and only returns
 	// an error if the server fails to start or encounters a fatal error.
-	if err := http.ListenAndServe(":4000", mux); err != nil {
+	if err := http.ListenAndServe(port, mux); err != nil {
 		log.Fatalf("http server error: %v", err)
 	}
 }

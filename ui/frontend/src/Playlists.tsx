@@ -1,5 +1,6 @@
 // Playlists fetches and displays the current user's Spotify playlists.
 import { useEffect, useState } from "react";
+import { api } from "./api";
 
 // Playlist represents the minimal fields returned by the backend API.
 interface Playlist {
@@ -17,13 +18,9 @@ function Playlists(): JSX.Element {
 
   useEffect(() => {
     // Fetch the user's playlists on component mount.
-    fetch("/api/playlists")
-      .then((res) => {
-        if (!res.ok) throw new Error("failed");
-        return res.json();
-      })
+    api<{ Playlists: Playlist[] }>("/api/playlists")
       .then((data) => setPlaylists(data.Playlists || []))
-      .catch(() => setError("Failed to load playlists"))
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
 

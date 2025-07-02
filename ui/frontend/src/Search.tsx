@@ -2,6 +2,7 @@
 // favorites. Returned tracks are displayed using the "card" style with a
 // subtle fade-in animation defined in the global CSS.
 import { useState } from "react";
+import { api } from "./api";
 
 interface Track {
   ID: string;
@@ -30,21 +31,14 @@ function Search({ theme }: Props): JSX.Element {
     if (!query) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/search?track=${encodeURIComponent(query)}`);
-      if (!res.ok) {
-        // Attempt to read an error message from the response.
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Search failed");
-        setResults([]);
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
+      const data = await api<Track[]>(
+        `/api/search?track=${encodeURIComponent(query)}`,
+      );
       setResults(data);
       setError("");
       setLoading(false);
-    } catch {
-      setError("Search failed");
+    } catch (e: any) {
+      setError(e.message);
       setResults([]);
       setLoading(false);
     }
@@ -52,7 +46,7 @@ function Search({ theme }: Props): JSX.Element {
 
   const addFav = async (t: Track) => {
     // Send the selected track to the server to be stored as a favorite.
-    await fetch("/favorites", {
+    await api("/favorites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
