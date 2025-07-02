@@ -28,7 +28,7 @@ func (app *Application) InsightsJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	since := time.Now().AddDate(0, 0, -7)
-	res, err := app.DB.TopArtistsSince(userCookie.Value, since)
+	res, err := app.DB.TopArtistsSince(r.Context(), userCookie.Value, since)
 	if err != nil {
 		http.Error(w, "failed to load insights", http.StatusInternalServerError)
 		return
@@ -60,7 +60,7 @@ func (app *Application) InsightsTracksJSON(w http.ResponseWriter, r *http.Reques
 		days = 7
 	}
 	since := time.Now().AddDate(0, 0, -days)
-	res, err := app.DB.TopTracksSince(userCookie.Value, since)
+	res, err := app.DB.TopTracksSince(r.Context(), userCookie.Value, since)
 	if err != nil {
 		http.Error(w, "failed to load insights", http.StatusInternalServerError)
 		return
@@ -94,7 +94,7 @@ func (app *Application) InsightsMonthlyJSON(w http.ResponseWriter, r *http.Reque
 			since = t
 		}
 	}
-	res, err := app.DB.MonthlyPlayCountsSince(userCookie.Value, since)
+	res, err := app.DB.MonthlyPlayCountsSince(r.Context(), userCookie.Value, since)
 	if err != nil {
 		http.Error(w, "failed to load insights", http.StatusInternalServerError)
 		return

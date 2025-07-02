@@ -11,7 +11,7 @@ import (
 func TestAggregatorMerge(t *testing.T) {
 	svc1 := fakeService{tracks: []Track{newTrack("1")}}
 	svc2 := fakeService{tracks: []Track{newTrack("2"), newTrack("1")}}
-	agg := Aggregator{Services: []Service{svc1, svc2}}
+	agg := Aggregator{Services: []Service{svc1, svc2}, MaxConcurrent: 1}
 	res, _ := agg.SearchTrack(context.Background(), "x")
 	if len(res) != 2 {
 		t.Fatalf("expected 2 results got %d", len(res))
@@ -25,7 +25,7 @@ func TestAggregatorMerge(t *testing.T) {
 func TestAggregatorGetRecommendations(t *testing.T) {
 	svc1 := fakeService{tracks: []Track{newTrack("a"), newTrack("b")}}
 	svc2 := fakeService{tracks: []Track{newTrack("b"), newTrack("c")}}
-	agg := Aggregator{Services: []Service{svc1, svc2}}
+	agg := Aggregator{Services: []Service{svc1, svc2}, MaxConcurrent: 1}
 	res, err := agg.GetRecommendations(context.Background(), []string{"seed"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

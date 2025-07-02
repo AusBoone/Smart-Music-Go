@@ -7,7 +7,8 @@
 package main
 
 import (
-	"log"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"strings"
@@ -80,11 +81,14 @@ func main() {
 		if yKey == "" || scID == "" {
 			log.Fatal("YOUTUBE_API_KEY and SOUNDCLOUD_CLIENT_ID must be set for aggregate service")
 		}
-		musicService = music.Aggregator{Services: []music.Service{
-			sc,
-			&youtube.Client{Key: yKey, Client: &http.Client{Timeout: 10 * time.Second}},
-			&soundcloud.Client{ClientID: scID, HTTP: &http.Client{Timeout: 10 * time.Second}},
-		}}
+		musicService = music.Aggregator{
+			Services: []music.Service{
+				sc,
+				&youtube.Client{Key: yKey, Client: &http.Client{Timeout: 10 * time.Second}},
+				&soundcloud.Client{ClientID: scID, HTTP: &http.Client{Timeout: 10 * time.Second}},
+			},
+			MaxConcurrent: 2,
+		}
 	}
 	// The authenticator handles the OAuth flow for user specific
 	// operations (like listing playlists). It needs the client credentials
@@ -117,6 +121,7 @@ func main() {
 	mux.HandleFunc("/api/recommendations", app.RecommendationsJSON)
 	mux.HandleFunc("/api/recommendations/mood", app.RecommendationsMood)
 	mux.HandleFunc("/login", app.Login)
+	mux.HandleFunc("/logout", app.Logout)
 	mux.HandleFunc("/api/recommendations/advanced", app.RecommendationsAdvanced)
 	mux.HandleFunc("/callback", app.OAuthCallback)
 	mux.HandleFunc("/playlists", app.Playlists)
@@ -158,6 +163,7 @@ func main() {
 	mux.HandleFunc("/api/insights", app.InsightsJSON)
 	mux.HandleFunc("/api/insights/tracks", app.InsightsTracksJSON)
 	mux.HandleFunc("/api/insights/monthly", app.InsightsMonthlyJSON)
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./ui/static"))))
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir("./ui/frontend/dist"))))
 

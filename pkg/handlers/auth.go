@@ -83,7 +83,7 @@ func (app *Application) refreshIfExpired(w http.ResponseWriter, r *http.Request,
 		return t, err
 	}
 	if app.DB != nil && userID != "" {
-		app.DB.SaveToken(userID, newTok)
+		app.DB.SaveToken(r.Context(), userID, newTok)
 	}
 	http.SetCookie(w, app.encodeToken(newTok, r.TLS != nil))
 	return newTok, nil
@@ -131,11 +131,19 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	client := app.Authenticator.NewClient(token)
 	user, err := client.CurrentUser()
 	if err == nil && app.DB != nil {
-		app.DB.SaveToken(user.ID, token)
+		app.DB.SaveToken(r.Context(), user.ID, token)
 	}
 	http.SetCookie(w, app.encodeToken(token, r.TLS != nil))
 	if user != nil {
 		http.SetCookie(w, &http.Cookie{Name: "spotify_user_id", Value: signValue(user.ID, app.SignKey), Path: "/"})
 	}
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// Logout clears authentication cookies so the user must re-authenticate. It
+// simply expires the relevant cookies on the client.
+func (app *Application) Logout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: "spotify_user_id", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: "spotify_token", Path: "/", MaxAge: -1})
 	http.Redirect(w, r, "/", http.StatusFound)
 }
