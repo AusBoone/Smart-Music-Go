@@ -28,9 +28,12 @@ The application requires Spotify credentials. Set the following variables before
 SPOTIFY_CLIENT_ID=your-client-id
 SPOTIFY_CLIENT_SECRET=your-client-secret
 SIGNING_KEY=some-random-string
+PORT=4000
 ```
 
 `SIGNING_KEY` is used to sign cookies so tampering attempts are detected.
+`PORT` controls the HTTP listening port. When unset the server defaults to
+`4000` which is suitable for local development.
 
 Set `DATABASE_PATH` to the SQLite file (defaults to `smartmusic.db`):
 
@@ -58,6 +61,12 @@ developer dashboard and ensure `SPOTIFY_REDIRECT_URL` matches this value.
 
 ```bash
 go run cmd/web/main.go
+```
+
+Set the `PORT` environment variable to change the listen address:
+
+```bash
+PORT=8080 go run cmd/web/main.go
 ```
 
 ### Viewing Results

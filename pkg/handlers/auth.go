@@ -67,6 +67,7 @@ func (app *Application) encodeToken(t *oauth2.Token, secure bool) *http.Cookie {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
 	}
 }
 
@@ -104,6 +105,7 @@ func (app *Application) Login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 	})
 	http.Redirect(w, r, app.Authenticator.AuthURL(state), http.StatusFound)
 }
@@ -135,7 +137,12 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, app.encodeToken(token, r.TLS != nil))
 	if user != nil {
-		http.SetCookie(w, &http.Cookie{Name: "spotify_user_id", Value: signValue(user.ID, app.SignKey), Path: "/"})
+		http.SetCookie(w, &http.Cookie{
+			Name:     "spotify_user_id",
+			Value:    signValue(user.ID, app.SignKey),
+			Path:     "/",
+			SameSite: http.SameSiteLaxMode,
+		})
 	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -143,7 +150,17 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 // Logout clears authentication cookies so the user must re-authenticate. It
 // simply expires the relevant cookies on the client.
 func (app *Application) Logout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: "spotify_user_id", Path: "/", MaxAge: -1})
-	http.SetCookie(w, &http.Cookie{Name: "spotify_token", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "spotify_user_id",
+		Path:     "/",
+		MaxAge:   -1,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "spotify_token",
+		Path:     "/",
+		MaxAge:   -1,
+		SameSite: http.SameSiteLaxMode,
+	})
 	http.Redirect(w, r, "/", http.StatusFound)
 }
