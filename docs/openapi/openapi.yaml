@@ -72,7 +72,146 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/favorites:
+    get:
+      summary: List favorites
+      responses:
+        '200':
+          description: Favorite tracks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Favorite'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      summary: Delete a favorite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                track_id:
+                  type: string
+      responses:
+        '204':
+          description: Removed
+        '404':
+          description: Favorite not found
+  /api/favorites.csv:
+    get:
+      summary: Export favorites as CSV
+      responses:
+        '200':
+          description: CSV data
+          content:
+            text/csv:
+              schema:
+                type: string
+  /api/share/track:
+    post:
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      summary: Create share link for track
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                track_id:
+                  type: string
+                track_name:
+                  type: string
+                artist_name:
+                  type: string
+      responses:
+        '200':
+          description: Share URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+  /api/share/playlist:
+    post:
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      summary: Create share link for playlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                playlist_id:
+                  type: string
+                playlist_name:
+                  type: string
+      responses:
+        '200':
+          description: Share URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+  /share/{id}:
+    get:
+      summary: View shared track
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+  /share/playlist/{id}:
+    get:
+      summary: View shared playlist
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
 components:
+  parameters:
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
   schemas:
     Track:
       type: object
@@ -92,4 +231,13 @@ components:
       type: object
       properties:
         error:
+          type: string
+    Favorite:
+      type: object
+      properties:
+        TrackID:
+          type: string
+        TrackName:
+          type: string
+        ArtistName:
           type: string

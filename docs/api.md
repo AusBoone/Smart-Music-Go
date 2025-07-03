@@ -4,7 +4,10 @@ This document details the HTTP endpoints exposed by **Smart-Music-Go**. All JSON
 
 ## Authentication
 
-Authenticate with Spotify by visiting `/login`. After authorizing, the callback at `/callback` stores a signed cookie containing the user ID and token. Most endpoints that access user data expect this cookie.
+Authenticate with Spotify by visiting `/login`. After authorizing, the callback at `/callback` stores a signed cookie containing the user ID and token. Authentication cookies are issued with `HttpOnly` and `Secure` flags when HTTPS is used. Most endpoints that access user data expect this cookie.
+Users can also sign in with Google via `/login/google` which sets a `google_user_id` cookie after the `/google/callback` exchange. Google authentication is required for creating share links.
+All state-changing requests must include the `X-CSRF-Token` header matching the
+value stored in the `csrf_token` cookie. This token is issued after login.
 
 ## Endpoints
 
@@ -67,6 +70,34 @@ Render the user's favorite tracks.
 
 ### `GET /api/favorites`
 Return favorites as JSON. Authentication required.
+
+### `DELETE /api/favorites`
+Remove a track from the user's favorites list. Body fields:
+* `track_id` - Spotify track ID
+Returns `204 No Content` when removed or `404` if the track was not saved.
+
+### `GET /api/favorites.csv`
+Export favorites as CSV with columns `track_id`, `track_name` and `artist_name`.
+
+### `POST /api/share/track`
+Generate a shareable link for a track. Requires Google authentication. Body fields:
+* `track_id` - Spotify track ID
+* `track_name` - display name
+* `artist_name` - main artist name
+Returns the URL in the form `{ "url": "http://host/share/id" }`.
+Links use random IDs so only those with the URL can access the shared track.
+
+### `GET /share/{id}`
+Display a simple page describing the shared track. The link redirects to Spotify for playback.
+
+### `POST /api/share/playlist`
+Generate a shareable link for a playlist. Requires Google authentication. Body fields:
+* `playlist_id` - Spotify playlist ID
+* `playlist_name` - display name
+Returns `{ "url": "http://host/share/playlist/id" }`.
+
+### `GET /share/playlist/{id}`
+Show an HTML page with the playlist information.
 
 ### `POST /api/history`
 Record that a track was played for the current user. Body fields:

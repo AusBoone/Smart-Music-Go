@@ -23,18 +23,32 @@
             <p class="name">{{.Name}}</p>
             <p class="artist">{{(index .Artists 0).Name}}</p>
             <button onclick="addFav('{{.ID}}','{{.Name}}','{{(index .Artists 0).Name}}')">Favorite</button>
+            <button onclick="shareTrack('{{.ID}}','{{.Name}}','{{(index .Artists 0).Name}}')">Share</button>
         </div>
         {{end}}
     </div>
     {{end}}
 <script>
 // Simple helper to post a new favorite track to the server
+function csrf(){
+  const m=document.cookie.match(/csrf_token=([^;]+)/);
+  return m?m[1]:'';
+}
 function addFav(id,name,artist){
   fetch('/favorites',{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:{'Content-Type':'application/json','X-CSRF-Token':csrf()},
     body:JSON.stringify({track_id:id,track_name:name,artist_name:artist})
   });
+}
+
+// shareTrack requests a shareable link from the server and displays it using a prompt.
+function shareTrack(id,name,artist){
+  fetch('/api/share/track',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRF-Token':csrf()},
+    body:JSON.stringify({track_id:id,track_name:name,artist_name:artist})
+  }).then(r=>r.json()).then(d=>{ if(d.url){ window.prompt('Share this link', d.url); }});
 }
 </script>
 </body>

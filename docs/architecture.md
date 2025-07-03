@@ -25,12 +25,14 @@ each provider concurrently (up to `MaxConcurrent` goroutines). Results are
 merged with duplicates removed by track ID. If every provider fails the first
 error is returned to the caller.
 
-Example configuration using YouTube and SoundCloud:
+Example configuration enabling every provider:
 
 ```
 MUSIC_SERVICE=aggregate
-YOUTUBE_API_KEY=your-key
+YOUTUBE_API_KEY=your-youtube-key
 SOUNDCLOUD_CLIENT_ID=client
+TIDAL_TOKEN=tidal-token
+# Apple Music and Amazon Music require no additional configuration
 ```
 
 Requests now include tracks gathered from all providers.
