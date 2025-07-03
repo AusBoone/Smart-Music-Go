@@ -1,7 +1,9 @@
 // Package handlers contains HTTP handlers for Smart-Music-Go. This file groups
 // authentication related helpers and endpoints such as the OAuth login and
 // callback handlers. Keeping these routines separate from the main handlers
-// file improves readability and maintainability.
+// file improves readability and maintainability. CSRF protection is implemented
+// using a random token stored in a cookie which clients must echo back in the
+// `X-CSRF-Token` header for all state changing requests.
 
 package handlers
 
@@ -9,8 +11,10 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -42,6 +46,98 @@ func verifyValue(signed string, key []byte) (string, bool) {
 		return "", false
 	}
 	return parts[0], true
+}
+
+// setCSRFToken generates a new random token and sets it in a cookie. The token
+// is returned so handlers can also include it in the response body if needed.
+// The cookie is not HttpOnly so client-side scripts can read the value and
+// attach it to subsequent requests.
+func setCSRFToken(w http.ResponseWriter, secure bool) (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	token := base64.RawURLEncoding.EncodeToString(b)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    token,
+		Path:     "/",
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+	return token, nil
+}
+
+// verifyCSRF compares the X-CSRF-Token header with the csrf_token cookie. The
+// comparison is constant time to avoid timing attacks. It returns true when the
+// values match and are present.
+func verifyCSRF(r *http.Request) bool {
+	c, err := r.Cookie("csrf_token")
+	if err != nil {
+		return false
+	}
+	header := r.Header.Get("X-CSRF-Token")
+	if header == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(header)) == 1
+}
+
+// userFromCookie returns the verified Spotify user ID from the request cookie.
+// An error is returned when the cookie is missing or has been tampered with.
+func (app *Application) userFromCookie(r *http.Request) (string, error) {
+	c, err := r.Cookie("spotify_user_id")
+	if err != nil {
+		return "", err
+	}
+	if v, ok := verifyValue(c.Value, app.SignKey); ok {
+		return v, nil
+	}
+	return "", fmt.Errorf("invalid signature")
+}
+
+// requireUser is a helper used by handlers to enforce authentication. It
+// writes a 401 response on failure and returns the user ID otherwise.
+func (app *Application) requireUser(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id, err := app.userFromCookie(r)
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return "", false
+	}
+	// Enforce CSRF protection on state-changing requests.
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && !verifyCSRF(r) {
+		http.Error(w, "invalid csrf token", http.StatusForbidden)
+		return "", false
+	}
+	return id, true
+}
+
+// userFromGoogleCookie returns the Google account ID from the signed cookie.
+// It mirrors userFromCookie but uses the google_user_id cookie.
+func (app *Application) userFromGoogleCookie(r *http.Request) (string, error) {
+	c, err := r.Cookie("google_user_id")
+	if err != nil {
+		return "", err
+	}
+	if v, ok := verifyValue(c.Value, app.SignKey); ok {
+		return v, nil
+	}
+	return "", fmt.Errorf("invalid signature")
+}
+
+// requireGoogleUser enforces that the request has a valid google_user_id cookie.
+// It writes a 401 response when missing or invalid.
+func (app *Application) requireGoogleUser(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id, err := app.userFromGoogleCookie(r)
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return "", false
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && !verifyCSRF(r) {
+		http.Error(w, "invalid csrf token", http.StatusForbidden)
+		return "", false
+	}
+	return id, true
 }
 
 // decodeToken converts the base64 encoded JSON token stored in cookies back
@@ -141,8 +237,16 @@ func (app *Application) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 			Name:     "spotify_user_id",
 			Value:    signValue(user.ID, app.SignKey),
 			Path:     "/",
+			HttpOnly: true,
+			Secure:   r.TLS != nil,
 			SameSite: http.SameSiteLaxMode,
 		})
+	}
+	// Issue a CSRF token for the session so clients can include it with
+	// state-changing requests.
+	if _, err := setCSRFToken(w, r.TLS != nil); err != nil {
+		http.Error(w, "csrf token", http.StatusInternalServerError)
+		return
 	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -154,13 +258,94 @@ func (app *Application) Logout(w http.ResponseWriter, r *http.Request) {
 		Name:     "spotify_user_id",
 		Path:     "/",
 		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
 		SameSite: http.SameSiteLaxMode,
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "spotify_token",
 		Path:     "/",
 		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
 		SameSite: http.SameSiteLaxMode,
 	})
+	http.SetCookie(w, &http.Cookie{Name: "csrf_token", Path: "/", MaxAge: -1})
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// GoogleLogin starts the Google OAuth flow. The generated state value is signed
+// and stored in a cookie mirroring the Spotify login behaviour.
+func (app *Application) GoogleLogin(w http.ResponseWriter, r *http.Request) {
+	if app.GoogleOAuth == nil {
+		http.Error(w, "google auth not configured", http.StatusInternalServerError)
+		return
+	}
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		http.Error(w, "failed to generate state", http.StatusInternalServerError)
+		return
+	}
+	state := base64.RawURLEncoding.EncodeToString(b)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "google_state",
+		Value:    signValue(state, app.SignKey),
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(w, r, app.GoogleOAuth.AuthCodeURL(state), http.StatusFound)
+}
+
+// GoogleCallback completes the Google OAuth flow and stores the user ID in a
+// signed cookie so subsequent requests can be authenticated.
+func (app *Application) GoogleCallback(w http.ResponseWriter, r *http.Request) {
+	if app.GoogleOAuth == nil {
+		http.Error(w, "google auth not configured", http.StatusInternalServerError)
+		return
+	}
+	c, err := r.Cookie("google_state")
+	if err != nil {
+		http.Error(w, "state mismatch", http.StatusBadRequest)
+		return
+	}
+	state, ok := verifyValue(c.Value, app.SignKey)
+	if !ok || r.URL.Query().Get("state") != state {
+		http.Error(w, "state mismatch", http.StatusBadRequest)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: "google_state", Path: "/", MaxAge: -1})
+	token, err := app.GoogleOAuth.Exchange(r.Context(), r.URL.Query().Get("code"))
+	if err != nil {
+		http.Error(w, "auth failed", http.StatusInternalServerError)
+		return
+	}
+	client := app.GoogleOAuth.Client(r.Context(), token)
+	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		http.Error(w, "failed to fetch user", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+	var data struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		http.Error(w, "decode user", http.StatusInternalServerError)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "google_user_id",
+		Value:    signValue(data.ID, app.SignKey),
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+	if _, err := setCSRFToken(w, r.TLS != nil); err != nil {
+		http.Error(w, "csrf token", http.StatusInternalServerError)
+		return
+	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }

@@ -37,10 +37,13 @@ Start the application with:
 go run cmd/web/main.go
 ```
 Visit `http://localhost:4000/login` to authenticate with Spotify then browse playlists or search for tracks. Favorites can be managed at `/favorites`.
-JSON responses are served from `/api/search`, `/api/playlists` and `/api/favorites` for use by the React frontend.
+JSON responses are served from `/api/search`, `/api/playlists` and `/api/favorites`. Favorites may be removed via `DELETE /api/favorites` and exported as CSV from `/api/favorites.csv`.
+Sign in with Google at `/login/google` to enable generating share links with the "Share" button on search results.
+Share links use random IDs for security. Playlists can also be shared from the playlists page using the generated link.
+All write requests must include the CSRF token from the `csrf_token` cookie in the `X-CSRF-Token` header.
 For monthly summaries of your listening history call `/api/insights/monthly`. Collaborative playlists can be created via `/api/collections` and managed using the `/api/collections/{id}/tracks` and `/api/collections/{id}/users` endpoints.
 Mood based recommendations are available via `/api/recommendations/mood?track_id=<id>` when a Spotify client is configured. Advanced filtering of energy and valence can be accessed through `/api/recommendations/advanced` with query parameters like `min_energy`.
-To search across Spotify, YouTube and SoundCloud simultaneously set `MUSIC_SERVICE=aggregate` in your environment and provide the respective API keys.
+To search across all enabled services (Spotify, YouTube, SoundCloud, Apple Music, Tidal and Amazon) set `MUSIC_SERVICE=aggregate`. Provide `YOUTUBE_API_KEY`, `SOUNDCLOUD_CLIENT_ID` and `TIDAL_TOKEN` if you want those sources included.
 
 ## Docker
 A `Dockerfile` and `docker-compose.yml` are provided for local development. The

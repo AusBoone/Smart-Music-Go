@@ -51,8 +51,11 @@ type Application struct {
 	}
 
 	Authenticator libspotify.Authenticator
-	DB            *db.DB
-	SignKey       []byte
+	// GoogleOAuth holds the configuration for Google sign-in. When nil the
+	// feature is disabled.
+	GoogleOAuth *oauth2.Config
+	DB          *db.DB
+	SignKey     []byte
 }
 
 // respondJSONError writes a JSON formatted error message. It standardises
@@ -305,28 +308,21 @@ func (app *Application) RecommendationsJSON(w http.ResponseWriter, r *http.Reque
 // Playlists renders an HTML page listing the logged-in user's playlists. It
 // requires a valid authentication cookie.
 func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
+	userID, ok := app.requireUser(w, r)
+	if !ok {
 		return
 	}
 	var token *oauth2.Token
 	if c, err := r.Cookie("spotify_token"); err == nil {
 		if v, ok := verifyValue(c.Value, app.SignKey); ok {
 			if t, errTok := decodeToken(v); errTok == nil {
-				token, _ = app.refreshIfExpired(w, r, userCookie.Value, t)
+				token, _ = app.refreshIfExpired(w, r, userID, t)
 			}
 		}
 	}
 	if token == nil && app.DB != nil {
-		if t, errTok := app.DB.GetToken(r.Context(), userCookie.Value); errTok == nil {
-			token, _ = app.refreshIfExpired(w, r, userCookie.Value, t)
+		if t, errTok := app.DB.GetToken(r.Context(), userID); errTok == nil {
+			token, _ = app.refreshIfExpired(w, r, userID, t)
 		} else {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
@@ -354,28 +350,21 @@ func (app *Application) Playlists(w http.ResponseWriter, r *http.Request) {
 // PlaylistsJSON handles /api/playlists and returns the playlists encoded as
 // JSON.
 func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
+	userID, ok := app.requireUser(w, r)
+	if !ok {
 		return
 	}
 	var token *oauth2.Token
 	if c, err := r.Cookie("spotify_token"); err == nil {
 		if v, ok := verifyValue(c.Value, app.SignKey); ok {
 			if t, errTok := decodeToken(v); errTok == nil {
-				token, _ = app.refreshIfExpired(w, r, userCookie.Value, t)
+				token, _ = app.refreshIfExpired(w, r, userID, t)
 			}
 		}
 	}
 	if token == nil && app.DB != nil {
-		if t, errTok := app.DB.GetToken(r.Context(), userCookie.Value); errTok == nil {
-			token, _ = app.refreshIfExpired(w, r, userCookie.Value, t)
+		if t, errTok := app.DB.GetToken(r.Context(), userID); errTok == nil {
+			token, _ = app.refreshIfExpired(w, r, userID, t)
 		} else {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
@@ -396,15 +385,8 @@ func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
 // AddHistoryJSON records that a track was played. It expects a JSON body with
 // track_id and artist_name fields. The current timestamp is stored.
 func (app *Application) AddHistoryJSON(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
+	userID, ok := app.requireUser(w, r)
+	if !ok {
 		return
 	}
 	if app.DB == nil {
@@ -423,7 +405,7 @@ func (app *Application) AddHistoryJSON(w http.ResponseWriter, r *http.Request) {
 		respondJSONError(w, http.StatusBadRequest, "track_id and artist_name are required")
 		return
 	}
-	if err := app.DB.AddHistory(r.Context(), userCookie.Value, req.TrackID, req.ArtistName, time.Now()); err != nil {
+	if err := app.DB.AddHistory(r.Context(), userID, req.TrackID, req.ArtistName, time.Now()); err != nil {
 		http.Error(w, "failed to save history", http.StatusInternalServerError)
 		return
 	}
@@ -432,22 +414,15 @@ func (app *Application) AddHistoryJSON(w http.ResponseWriter, r *http.Request) {
 
 // CreateCollectionJSON starts a new collaborative playlist owned by the user.
 func (app *Application) CreateCollectionJSON(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
+	userID, ok := app.requireUser(w, r)
+	if !ok {
 		return
 	}
 	if app.DB == nil {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	id, err := app.DB.CreateCollection(r.Context(), userCookie.Value)
+	id, err := app.DB.CreateCollection(r.Context(), userID)
 	if err != nil {
 		http.Error(w, "failed to create collection", http.StatusInternalServerError)
 		return
@@ -458,15 +433,7 @@ func (app *Application) CreateCollectionJSON(w http.ResponseWriter, r *http.Requ
 
 // AddCollectionTrackJSON appends a track to an existing collection.
 func (app *Application) AddCollectionTrackJSON(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
+	if _, ok := app.requireUser(w, r); !ok {
 		return
 	}
 	colID := strings.TrimPrefix(r.URL.Path, "/api/collections/")
@@ -502,15 +469,7 @@ func (app *Application) AddCollectionTrackJSON(w http.ResponseWriter, r *http.Re
 // AddCollectionUserJSON associates another user with the specified collection
 // so they can contribute tracks. The body must include a user_id field.
 func (app *Application) AddCollectionUserJSON(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
+	if _, ok := app.requireUser(w, r); !ok {
 		return
 	}
 	colID := strings.TrimPrefix(r.URL.Path, "/api/collections/")

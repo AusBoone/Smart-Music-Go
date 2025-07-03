@@ -29,9 +29,17 @@ SPOTIFY_CLIENT_ID=your-client-id
 SPOTIFY_CLIENT_SECRET=your-client-secret
 SIGNING_KEY=some-random-string
 PORT=4000
+GOOGLE_CLIENT_ID=<google-id>
+GOOGLE_CLIENT_SECRET=<google-secret>
 ```
 
 `SIGNING_KEY` is used to sign cookies so tampering attempts are detected.
+Authentication cookies are issued with `HttpOnly` and `Secure` flags when HTTPS
+is used, limiting exposure to cross-site scripting attacks.
+Responses include strict security headers such as `Content-Security-Policy` and `X-Frame-Options`.
+All POST and DELETE requests require a CSRF token stored in the `csrf_token`
+cookie. JavaScript should read this cookie and include it in the
+`X-CSRF-Token` header.
 `PORT` controls the HTTP listening port. When unset the server defaults to
 `4000` which is suitable for local development.
 
@@ -39,13 +47,16 @@ Set `DATABASE_PATH` to the SQLite file (defaults to `smartmusic.db`):
 
 ```
 DATABASE_PATH=smartmusic.db
+GOOGLE_REDIRECT_URL=http://localhost:4000/google/callback
 ```
 The database schema is created automatically on startup, so no manual migrations are required.
 
-`MUSIC_SERVICE` selects the backend provider. Options are `spotify`, `youtube`,
-`soundcloud` or `aggregate`. When using the YouTube or SoundCloud providers you
-must set `YOUTUBE_API_KEY` or `SOUNDCLOUD_CLIENT_ID` respectively. The
-`aggregate` mode queries all available services.
+`MUSIC_SERVICE` selects the backend provider. Options include `spotify`,
+`youtube`, `soundcloud`, `applemusic`, `tidal`, `amazon` or `aggregate`.
+When using `youtube`, `soundcloud` or `tidal` you must provide the environment
+variables `YOUTUBE_API_KEY`, `SOUNDCLOUD_CLIENT_ID` and `TIDAL_TOKEN`
+respectively. The `aggregate` mode queries every enabled service allowing
+broader discovery across platforms.
 
 You can copy the provided `.env.example` to `.env` and populate your values:
 
@@ -71,6 +82,7 @@ PORT=8080 go run cmd/web/main.go
 
 ### Viewing Results
 Visit `http://localhost:4000/login` to authorize with Spotify. After authorization, open `http://localhost:4000/playlists` or perform a search.
+Use `/login/google` if you want to generate shareable links for tracks.
 The API endpoints `/api/search`, `/api/playlists` and `/api/favorites` return JSON used by the React interface.
 Additional endpoints provide listening insights and collaborative playlist features:
 
@@ -83,7 +95,9 @@ curl "http://localhost:4000/api/recommendations/advanced?track_id=123&min_energy
 
 
 ### Favorites
-After logging in you can mark tracks as favorites from the search results. View them at `/favorites` or from the React "Favorites" tab.
+After logging in you can mark tracks as favorites from the search results. View them at `/favorites` or from the React "Favorites" tab. Favorites can also be removed via `DELETE /api/favorites` and exported as CSV from `/api/favorites.csv`.
+When signed in with Google the search results page offers a *Share* button that generates a short link to the track so you can easily recommend songs to friends.
+Links use random identifiers so shared tracks cannot be guessed. Playlists have a similar *Share* button on the playlists page.
 
 ### Frontend Setup
 
@@ -153,7 +167,8 @@ contributing can be found in the [docs](docs) directory:
 
 - [Usage](docs/usage.md) – running locally and configuring authentication
  - [Deployment](docs/deployment.md) – production deployment options
- - [Architecture](docs/architecture.md) – overview of packages and request flow
+- [Architecture](docs/architecture.md) – overview of packages and request flow
+- [Services](docs/services.md) – how Spotify, YouTube, SoundCloud and others integrate
  - [Contributing](CONTRIBUTING.md)
  - [OpenAPI Spec](docs/openapi/openapi.yaml) – machine readable API definition
 
