@@ -2,8 +2,18 @@
 <h1>Your Playlists</h1>
 <ul>
 {{range .Playlists}}
-  <li>{{.Name}}</li>
+  <li>{{.Name}} <button onclick="sharePl('{{.ID}}','{{.Name}}')">Share</button></li>
 {{else}}
   <li>No playlists found</li>
 {{end}}
 </ul>
+<script>
+function csrf(){const m=document.cookie.match(/csrf_token=([^;]+)/);return m?m[1]:'';}
+function sharePl(id,name){
+  fetch('/api/share/playlist',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRF-Token':csrf()},
+    body:JSON.stringify({playlist_id:id,playlist_name:name})
+  }).then(r=>r.json()).then(d=>{if(d.url){window.prompt('Share this playlist',d.url);}});
+}
+</script>
