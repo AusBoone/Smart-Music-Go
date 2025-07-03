@@ -1,10 +1,13 @@
 // Package handlers groups HTTP handlers for Smart-Music-Go. This file focuses
 // on endpoints that manage user favorites, both the HTML page and the JSON API.
-// Splitting favorites logic keeps the handler implementations concise.
+// Recent updates add CSV export so favorites can be shared easily. Splitting
+// favorites logic keeps the handler implementations concise.
 
 package handlers
 
 import (
+	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	log "github.com/sirupsen/logrus"
 	"html/template"
@@ -14,15 +17,8 @@ import (
 // AddFavorite accepts a JSON payload describing a track and saves it to the
 // current user's favorites list. The user ID is retrieved from a signed cookie.
 func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
+	userID, ok := app.requireUser(w, r)
+	if !ok {
 		return
 	}
 	var req struct {
@@ -42,32 +38,61 @@ func (app *Application) AddFavorite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	if err := app.DB.AddFavorite(r.Context(), userCookie.Value, req.TrackID, req.TrackName, req.ArtistName); err != nil {
+	if err := app.DB.AddFavorite(r.Context(), userID, req.TrackID, req.TrackName, req.ArtistName); err != nil {
 		http.Error(w, "failed to save favorite", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
 }
 
-// Favorites renders an HTML page listing tracks the user has marked as
-// favorites.
-func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
+// DeleteFavorite removes a track from the current user's favorites list. It
+// expects a JSON body containing a track_id field. Missing or unsigned cookies
+// result in a 401 response. A 404 status is returned when the favorite does not
+// exist.
+func (app *Application) DeleteFavorite(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.requireUser(w, r)
+	if !ok {
 		return
 	}
 	if app.DB == nil {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	favs, err := app.DB.ListFavorites(r.Context(), userCookie.Value)
+	var req struct {
+		TrackID string `json:"track_id"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		respondJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.TrackID == "" {
+		respondJSONError(w, http.StatusBadRequest, "track_id is required")
+		return
+	}
+	var err error
+	err = app.DB.DeleteFavorite(r.Context(), userID, req.TrackID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "favorite not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "failed to delete favorite", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Favorites renders an HTML page listing tracks the user has marked as
+// favorites.
+func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.requireUser(w, r)
+	if !ok {
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	favs, err := app.DB.ListFavorites(r.Context(), userID)
 	if err != nil {
 		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
 		return
@@ -86,26 +111,44 @@ func (app *Application) Favorites(w http.ResponseWriter, r *http.Request) {
 // FavoritesJSON returns the user's favorites as JSON for consumption by the
 // frontend.
 func (app *Application) FavoritesJSON(w http.ResponseWriter, r *http.Request) {
-	userCookie, err := r.Cookie("spotify_user_id")
-	if err != nil {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	if v, ok := verifyValue(userCookie.Value, app.SignKey); ok {
-		userCookie.Value = v
-	} else {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
+	userID, ok := app.requireUser(w, r)
+	if !ok {
 		return
 	}
 	if app.DB == nil {
 		http.Error(w, "db not configured", http.StatusInternalServerError)
 		return
 	}
-	favs, err := app.DB.ListFavorites(r.Context(), userCookie.Value)
+	favs, err := app.DB.ListFavorites(r.Context(), userID)
 	if err != nil {
 		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(favs)
+}
+
+// FavoritesCSV exports the user's favorites in CSV format so they can be
+// imported into other tools. The first row contains column headers.
+func (app *Application) FavoritesCSV(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.requireUser(w, r)
+	if !ok {
+		return
+	}
+	if app.DB == nil {
+		http.Error(w, "db not configured", http.StatusInternalServerError)
+		return
+	}
+	favs, err := app.DB.ListFavorites(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "failed to load favorites", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv")
+	enc := csv.NewWriter(w)
+	enc.Write([]string{"track_id", "track_name", "artist_name"})
+	for _, f := range favs {
+		enc.Write([]string{f.TrackID, f.TrackName, f.ArtistName})
+	}
+	enc.Flush()
 }

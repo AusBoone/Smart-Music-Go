@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -41,6 +42,14 @@ func (f fakeSpotify) GetAudioFeatures(ids ...string) ([]*libspotify.AudioFeature
 }
 
 var testKey = []byte("test-key")
+
+// addCSRF attaches a fixed CSRF token header and cookie to the request so
+// handlers requiring the token succeed in tests.
+func addCSRF(req *http.Request) {
+	token := "token"
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
+	req.Header.Set("X-CSRF-Token", token)
+}
 
 func (f fakeSearcher) SearchTrack(ctx context.Context, track string) ([]music.Track, error) {
 	return f.tracks, f.err
@@ -277,6 +286,15 @@ func TestAddFavoriteAuth(t *testing.T) {
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401 for bad cookie, got %d", rr.Code)
 	}
+
+	// Valid cookie but missing CSRF token should fail with 403.
+	req = httptest.NewRequest(http.MethodPost, "/favorites", strings.NewReader(`{}`))
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr = httptest.NewRecorder()
+	app.AddFavorite(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing csrf, got %d", rr.Code)
+	}
 }
 
 // TestAddFavoriteValidation verifies that missing fields return a 400 error.
@@ -285,10 +303,200 @@ func TestAddFavoriteValidation(t *testing.T) {
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodPost, "/favorites", strings.NewReader(`{}`))
 	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(req)
 	rr := httptest.NewRecorder()
 	app.AddFavorite(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 got %d", rr.Code)
+	}
+}
+
+// TestDeleteFavorite verifies that a stored favorite can be removed through the
+// API and that deleting a non-existent favorite returns 404.
+func TestDeleteFavorite(t *testing.T) {
+	d, _ := db.New(":memory:")
+	d.AddFavorite(context.Background(), "u", "1", "Song", "Artist")
+	app := &Application{DB: d, SignKey: testKey}
+	req := httptest.NewRequest(http.MethodDelete, "/api/favorites", strings.NewReader(`{"track_id":"1"}`))
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(req)
+	rr := httptest.NewRecorder()
+	app.DeleteFavorite(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 got %d", rr.Code)
+	}
+	// verify gone
+	favs, _ := d.ListFavorites(context.Background(), "u")
+	if len(favs) != 0 {
+		t.Fatalf("favorite not removed: %+v", favs)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/favorites", strings.NewReader(`{"track_id":"x"}`))
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(req)
+	rr = httptest.NewRecorder()
+	app.DeleteFavorite(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 got %d", rr.Code)
+	}
+}
+
+// TestFavoritesCSV verifies that favorites can be exported as CSV.
+func TestFavoritesCSV(t *testing.T) {
+	d, _ := db.New(":memory:")
+	d.AddFavorite(context.Background(), "u", "1", "Song", "Artist")
+	app := &Application{DB: d, SignKey: testKey}
+	req := httptest.NewRequest(http.MethodGet, "/api/favorites.csv", nil)
+	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	rr := httptest.NewRecorder()
+	app.FavoritesCSV(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "track_id,track_name,artist_name") {
+		t.Fatalf("unexpected csv output: %s", body)
+	}
+}
+
+// TestGoogleLoginCookie ensures the Google login handler sets a signed state cookie.
+func TestGoogleLoginCookie(t *testing.T) {
+	app := &Application{GoogleOAuth: &oauth2.Config{ClientID: "id", ClientSecret: "secret", RedirectURL: "http://example.com"}, SignKey: testKey}
+	req := httptest.NewRequest(http.MethodGet, "/login/google", nil)
+	rr := httptest.NewRecorder()
+	app.GoogleLogin(rr, req)
+	found := false
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == "google_state" {
+			found = true
+			if c.SameSite != http.SameSiteLaxMode {
+				t.Errorf("google_state cookie SameSite not set")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("google_state cookie not set")
+	}
+}
+
+// TestGoogleCallbackCookie verifies that GoogleCallback stores a secure cookie
+// after successful authentication.
+func TestGoogleCallbackCookie(t *testing.T) {
+	// Fake OAuth2 server responding with a token.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/token" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"access_token":"t","token_type":"Bearer"}`)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	cfg := &oauth2.Config{
+		ClientID:     "id",
+		ClientSecret: "secret",
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  ts.URL + "/auth",
+			TokenURL: ts.URL + "/token",
+		},
+		RedirectURL: "http://example.com",
+	}
+
+	// HTTP client intercepts the userinfo request.
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host == "www.googleapis.com" {
+			res := `{"id":"gid"}`
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(res)), Header: http.Header{"Content-Type": {"application/json"}}}, nil
+		}
+		return http.DefaultTransport.RoundTrip(r)
+	})}
+
+	app := &Application{GoogleOAuth: cfg, SignKey: testKey}
+
+	state := "abc"
+	req := httptest.NewRequest(http.MethodGet, "/google/callback?state="+state+"&code=x", nil)
+	req.AddCookie(&http.Cookie{Name: "google_state", Value: signValue(state, testKey)})
+	req = req.WithContext(context.WithValue(req.Context(), oauth2.HTTPClient, client))
+
+	rr := httptest.NewRecorder()
+	app.GoogleCallback(rr, req)
+
+	found := false
+	var csrfFound bool
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == "google_user_id" {
+			found = true
+			if !c.HttpOnly || c.Secure != false {
+				t.Errorf("cookie flags not set")
+			}
+		} else if c.Name == "csrf_token" {
+			csrfFound = true
+		}
+	}
+	if !found {
+		t.Fatalf("google_user_id cookie not set")
+	}
+	if !csrfFound {
+		t.Errorf("csrf_token cookie not set")
+	}
+}
+
+// TestAddShareTrack verifies a share link is created and returned as JSON.
+func TestAddShareTrack(t *testing.T) {
+	d, _ := db.New(":memory:")
+	app := &Application{DB: d, SignKey: testKey}
+	body := strings.NewReader(`{"track_id":"1","track_name":"Song","artist_name":"Artist"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/share/track", body)
+	req.AddCookie(&http.Cookie{Name: "google_user_id", Value: signValue("g", testKey)})
+	addCSRF(req)
+	rr := httptest.NewRecorder()
+	app.AddShareTrack(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d", rr.Code)
+	}
+	var res map[string]string
+	json.NewDecoder(rr.Body).Decode(&res)
+	if !strings.Contains(res["url"], "/share/") {
+		t.Fatalf("unexpected url %v", res)
+	}
+}
+
+// TestAddSharePlaylist ensures playlists can be shared via the API.
+func TestAddSharePlaylist(t *testing.T) {
+	d, _ := db.New(":memory:")
+	app := &Application{DB: d, SignKey: testKey}
+	body := strings.NewReader(`{"playlist_id":"pl","playlist_name":"MyList"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/share/playlist", body)
+	req.AddCookie(&http.Cookie{Name: "google_user_id", Value: signValue("g", testKey)})
+	addCSRF(req)
+	rr := httptest.NewRecorder()
+	app.AddSharePlaylist(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d", rr.Code)
+	}
+	var res map[string]string
+	json.NewDecoder(rr.Body).Decode(&res)
+	if !strings.Contains(res["url"], "/share/playlist/") {
+		t.Fatalf("unexpected url %v", res)
+	}
+}
+
+// TestSecurityHeaders verifies the middleware adds expected headers.
+func TestSecurityHeaders(t *testing.T) {
+	h := SecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.TLS = &tls.ConnectionState{}
+	h.ServeHTTP(rr, req)
+	if rr.Header().Get("Content-Security-Policy") == "" {
+		t.Fatalf("CSP header missing")
+	}
+	if rr.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("frame header wrong")
+	}
+	if rr.Header().Get("Strict-Transport-Security") == "" {
+		t.Fatalf("HSTS header missing")
 	}
 }
 
@@ -298,6 +506,7 @@ func TestAddHistoryValidation(t *testing.T) {
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodPost, "/api/history", strings.NewReader(`{}`))
 	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(req)
 	rr := httptest.NewRecorder()
 	app.AddHistoryJSON(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -312,6 +521,7 @@ func TestAddCollectionTrackValidation(t *testing.T) {
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodPost, "/api/collections/abc/tracks", strings.NewReader("{"))
 	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(req)
 	rr := httptest.NewRecorder()
 	app.AddCollectionTrackJSON(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -325,6 +535,7 @@ func TestAddCollectionUserValidation(t *testing.T) {
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodPost, "/api/collections/abc/users", strings.NewReader(`{}`))
 	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(req)
 	rr := httptest.NewRecorder()
 	app.AddCollectionUserJSON(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -338,6 +549,14 @@ func (r rt) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp := &http.Response{StatusCode: 200, Header: make(http.Header)}
 	resp.Body = io.NopCloser(strings.NewReader(r.data))
 	return resp, nil
+}
+
+// roundTripFunc allows custom HTTP behaviour inside tests without defining a
+// full struct type each time.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
 }
 
 func setAuthClient(a *libspotify.Authenticator, c *http.Client) {
@@ -491,6 +710,7 @@ func TestAddHistoryAndCollections(t *testing.T) {
 	// Record a play event via the history endpoint.
 	histReq := httptest.NewRequest(http.MethodPost, "/api/history", strings.NewReader(`{"track_id":"1","artist_name":"Artist"}`))
 	histReq.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(histReq)
 	rr := httptest.NewRecorder()
 	app.AddHistoryJSON(rr, histReq)
 	if rr.Code != http.StatusCreated {
@@ -504,6 +724,7 @@ func TestAddHistoryAndCollections(t *testing.T) {
 	// Create a new collection then add a track and a user.
 	colReq := httptest.NewRequest(http.MethodPost, "/api/collections", nil)
 	colReq.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(colReq)
 	rr = httptest.NewRecorder()
 	app.CreateCollectionJSON(rr, colReq)
 	if rr.Code != http.StatusOK {
@@ -515,6 +736,7 @@ func TestAddHistoryAndCollections(t *testing.T) {
 
 	trackReq := httptest.NewRequest(http.MethodPost, "/api/collections/"+colID+"/tracks", strings.NewReader(`{"track_id":"1","track_name":"Song","artist_name":"Artist"}`))
 	trackReq.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(trackReq)
 	rr = httptest.NewRecorder()
 	app.AddCollectionTrackJSON(rr, trackReq)
 	if rr.Code != http.StatusCreated {
@@ -528,6 +750,7 @@ func TestAddHistoryAndCollections(t *testing.T) {
 
 	userReq := httptest.NewRequest(http.MethodPost, "/api/collections/"+colID+"/users", strings.NewReader(`{"user_id":"other"}`))
 	userReq.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
+	addCSRF(userReq)
 	rr = httptest.NewRecorder()
 	app.AddCollectionUserJSON(rr, userReq)
 	if rr.Code != http.StatusCreated {

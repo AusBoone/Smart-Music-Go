@@ -60,6 +60,8 @@ func TestIntegrationSearchFavorite(t *testing.T) {
 	favReqBody := `{"track_id":"1","track_name":"Song","artist_name":"Artist"}`
 	favReq, _ := http.NewRequest(http.MethodPost, srv.URL+"/favorites", strings.NewReader(favReqBody))
 	favReq.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: sign("user")})
+	favReq.AddCookie(&http.Cookie{Name: "csrf_token", Value: "t"})
+	favReq.Header.Set("X-CSRF-Token", "t")
 	resp, err := http.DefaultClient.Do(favReq)
 	if err != nil || resp.StatusCode != http.StatusCreated {
 		t.Fatalf("favorite add failed %v %d", err, resp.StatusCode)

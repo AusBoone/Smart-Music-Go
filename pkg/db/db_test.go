@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"testing"
 	"time"
@@ -30,6 +31,52 @@ func TestAddAndListFavorites(t *testing.T) {
 	}
 	if len(favs) != 1 || favs[0].TrackID != "1" {
 		t.Fatalf("unexpected favorites: %+v", favs)
+	}
+}
+
+// TestDeleteFavorite verifies that DeleteFavorite removes the record and
+// returns sql.ErrNoRows when attempting to delete a missing entry.
+func TestDeleteFavorite(t *testing.T) {
+	d, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if err := d.AddFavorite(context.Background(), "u", "1", "Song", "Artist"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DeleteFavorite(context.Background(), "u", "1"); err != nil {
+		t.Fatalf("delete failed: %v", err)
+	}
+	favs, _ := d.ListFavorites(context.Background(), "u")
+	if len(favs) != 0 {
+		t.Fatalf("favorite not removed: %+v", favs)
+	}
+	if err := d.DeleteFavorite(context.Background(), "u", "missing"); err != sql.ErrNoRows {
+		t.Fatalf("expected ErrNoRows, got %v", err)
+	}
+}
+
+// TestAddFavoriteDedup ensures inserting the same track twice does not create
+// duplicate rows thanks to the UNIQUE index and INSERT OR IGNORE.
+func TestAddFavoriteDedup(t *testing.T) {
+	d, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if err := d.AddFavorite(context.Background(), "u", "1", "Song", "Artist"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddFavorite(context.Background(), "u", "1", "Song", "Artist"); err != nil {
+		t.Fatal(err)
+	}
+	favs, err := d.ListFavorites(context.Background(), "u")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(favs) != 1 {
+		t.Fatalf("expected one favorite, got %d", len(favs))
 	}
 }
 
@@ -149,6 +196,47 @@ func TestAddUserToCollection(t *testing.T) {
 	}
 	if c != 1 {
 		t.Fatalf("expected 1 user row got %d", c)
+	}
+}
+
+// TestShareTrack verifies that a track can be stored and retrieved using a
+// generated share ID.
+func TestShareTrack(t *testing.T) {
+	d, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	id, err := d.CreateShareTrack(context.Background(), "1", "Song", "Artist")
+	if err != nil || len(id) < 10 {
+		t.Fatalf("create share failed: %v", err)
+	}
+	st, err := d.GetShareTrack(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.TrackID != "1" || st.TrackName != "Song" {
+		t.Fatalf("unexpected share %+v", st)
+	}
+}
+
+// TestSharePlaylist verifies playlists can be shared and retrieved by ID.
+func TestSharePlaylist(t *testing.T) {
+	d, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	id, err := d.CreateSharePlaylist(context.Background(), "pl1", "My Mix")
+	if err != nil || id == "" {
+		t.Fatalf("create share failed: %v", err)
+	}
+	sp, err := d.GetSharePlaylist(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sp.PlaylistID != "pl1" || sp.PlaylistName != "My Mix" {
+		t.Fatalf("unexpected share %+v", sp)
 	}
 }
 
