@@ -34,7 +34,9 @@ func (app *Application) InsightsJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		log.WithError(err).Error("encode insights artists")
+	}
 }
 
 // InsightsTracksJSON returns the most played tracks for a configurable period
@@ -66,7 +68,9 @@ func (app *Application) InsightsTracksJSON(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		log.WithError(err).Error("encode insights tracks")
+	}
 }
 
 // InsightsMonthlyJSON groups play counts by month starting from an optional
@@ -100,5 +104,7 @@ func (app *Application) InsightsMonthlyJSON(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		log.WithError(err).Error("encode insights monthly")
+	}
 }

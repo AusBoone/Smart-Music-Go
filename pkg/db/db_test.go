@@ -41,7 +41,11 @@ func TestDeleteFavorite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if err := d.AddFavorite(context.Background(), "u", "1", "Song", "Artist"); err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +68,11 @@ func TestAddFavoriteDedup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if err := d.AddFavorite(context.Background(), "u", "1", "Song", "Artist"); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +95,11 @@ func TestSaveAndGetToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	tok := &oauth2.Token{AccessToken: "abc", RefreshToken: "refresh"}
 	if err := d.SaveToken(context.Background(), "u", tok); err != nil {
 		t.Fatal(err)
@@ -110,7 +122,11 @@ func TestHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	now := time.Now()
 	if err := d.AddHistory(context.Background(), "u", "1", "Artist", now); err != nil {
 		t.Fatal(err)
@@ -133,7 +149,11 @@ func TestTopTracksSince(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	now := time.Now()
 	d.AddHistory(context.Background(), "u", "1", "Artist", now)
 	d.AddHistory(context.Background(), "u", "1", "Artist", now.Add(time.Minute))
@@ -152,7 +172,11 @@ func TestCollections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	id, err := d.CreateCollection(context.Background(), "u")
 	if err != nil || id == "" {
 		t.Fatalf("create collection failed: %v", err)
@@ -175,7 +199,11 @@ func TestAddUserToCollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	id, _ := d.CreateCollection(context.Background(), "owner")
 	if err := d.AddUserToCollection(context.Background(), id, "user2"); err != nil {
 		t.Fatal(err)
@@ -189,7 +217,11 @@ func TestAddUserToCollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 	var c int
 	if rows.Next() {
 		rows.Scan(&c)
@@ -206,7 +238,11 @@ func TestShareTrack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	id, err := d.CreateShareTrack(context.Background(), "1", "Song", "Artist")
 	if err != nil || len(id) < 10 {
 		t.Fatalf("create share failed: %v", err)
@@ -226,7 +262,11 @@ func TestSharePlaylist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	id, err := d.CreateSharePlaylist(context.Background(), "pl1", "My Mix")
 	if err != nil || id == "" {
 		t.Fatalf("create share failed: %v", err)
@@ -246,7 +286,11 @@ func TestMonthlyPlayCountsSince(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	defer func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	base := time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC)
 	d.AddHistory(context.Background(), "u", "1", "Artist", base)
 	d.AddHistory(context.Background(), "u", "2", "Artist", base.AddDate(0, 1, 0))

@@ -141,7 +141,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("db init: %v", err)
 	}
-	defer database.Close()
+	// Close the database when the server shuts down and log any error.
+	defer func() {
+		if err := database.Close(); err != nil {
+			log.WithError(err).Error("database close")
+		}
+	}()
 
 	// Create the application struct which bundles the dependencies used by
 	// our HTTP handlers.
@@ -171,11 +176,12 @@ func main() {
 		}
 	})
 	mux.HandleFunc("/api/favorites", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
+		switch r.Method {
+		case http.MethodPost:
 			app.AddFavorite(w, r)
-		} else if r.Method == http.MethodDelete {
+		case http.MethodDelete:
 			app.DeleteFavorite(w, r)
-		} else {
+		default:
 			app.FavoritesJSON(w, r)
 		}
 	})

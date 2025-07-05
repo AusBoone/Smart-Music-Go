@@ -125,7 +125,9 @@ func (app *Application) FavoritesJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(favs)
+	if err := json.NewEncoder(w).Encode(favs); err != nil {
+		log.WithError(err).Error("encode favorites response")
+	}
 }
 
 // FavoritesCSV exports the user's favorites in CSV format so they can be
@@ -146,9 +148,19 @@ func (app *Application) FavoritesCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/csv")
 	enc := csv.NewWriter(w)
-	enc.Write([]string{"track_id", "track_name", "artist_name"})
-	for _, f := range favs {
-		enc.Write([]string{f.TrackID, f.TrackName, f.ArtistName})
+	if err := enc.Write([]string{"track_id", "track_name", "artist_name"}); err != nil {
+		log.WithError(err).Error("csv header write")
+		http.Error(w, "csv error", http.StatusInternalServerError)
+		return
 	}
-	enc.Flush()
+	for _, f := range favs {
+		if err := enc.Write([]string{f.TrackID, f.TrackName, f.ArtistName}); err != nil {
+			log.WithError(err).Error("csv row write")
+			http.Error(w, "csv error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := enc.Flush(); err != nil {
+		log.WithError(err).Error("csv flush")
+	}
 }

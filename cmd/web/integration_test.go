@@ -34,7 +34,10 @@ func TestIntegrationSearchFavorite(t *testing.T) {
 	auth := libspotify.NewAuthenticator("http://example.com/cb")
 	auth.SetAuthInfo("id", "secret")
 
-	database, _ := db.New(":memory:")
+	database, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
 	app := &handlers.Application{Music: svc, Authenticator: auth, DB: database, SignKey: testKey}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/search", app.SearchJSON)

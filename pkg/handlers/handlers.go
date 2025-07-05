@@ -63,7 +63,9 @@ type Application struct {
 func respondJSONError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
+		log.WithError(err).Error("encode error response")
+	}
 }
 
 // Home renders the landing page.  It shows the search form where users can
@@ -242,7 +244,9 @@ func (app *Application) RecommendationsMood(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tracks)
+	if err := json.NewEncoder(w).Encode(tracks); err != nil {
+		log.WithError(err).Error("encode recommendations response")
+	}
 }
 
 // SearchJSON handles the /api/search endpoint and writes search results as
@@ -282,7 +286,9 @@ func (app *Application) SearchJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	// Encode the results to JSON for the client.
-	json.NewEncoder(w).Encode(results)
+	if err := json.NewEncoder(w).Encode(results); err != nil {
+		log.WithError(err).Error("encode search response")
+	}
 }
 
 // Recommendations handles /api/recommendations and returns track suggestions as JSON.
@@ -302,7 +308,9 @@ func (app *Application) RecommendationsJSON(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tracks)
+	if err := json.NewEncoder(w).Encode(tracks); err != nil {
+		log.WithError(err).Error("encode recommendations response")
+	}
 }
 
 // Playlists renders an HTML page listing the logged-in user's playlists. It
@@ -377,7 +385,9 @@ func (app *Application) PlaylistsJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(playlists)
+	if err := json.NewEncoder(w).Encode(playlists); err != nil {
+		log.WithError(err).Error("encode playlists response")
+	}
 }
 
 // AddFavorite accepts a JSON payload describing a track and stores it in the
@@ -428,7 +438,9 @@ func (app *Application) CreateCollectionJSON(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"id": id})
+	if err := json.NewEncoder(w).Encode(map[string]string{"id": id}); err != nil {
+		log.WithError(err).Error("encode collection id")
+	}
 }
 
 // AddCollectionTrackJSON appends a track to an existing collection.
@@ -518,7 +530,9 @@ func (app *Application) ListCollectionTracksJSON(w http.ResponseWriter, r *http.
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tracks)
+	if err := json.NewEncoder(w).Encode(tracks); err != nil {
+		log.WithError(err).Error("encode collection tracks")
+	}
 }
 
 // RecommendationsAdvanced allows specifying additional audio features for recommendations.
@@ -550,5 +564,7 @@ func (app *Application) RecommendationsAdvanced(w http.ResponseWriter, r *http.R
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tracks)
+	if err := json.NewEncoder(w).Encode(tracks); err != nil {
+		log.WithError(err).Error("encode advanced recommendations")
+	}
 }

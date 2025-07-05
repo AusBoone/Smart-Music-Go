@@ -44,7 +44,9 @@ func (f fakeSearcher) GetRecommendations(ctx context.Context, seedIDs []string) 
 // TestMain changes the working directory so templates resolve correctly when
 // tests are run from the package directory.
 func TestMain(m *testing.M) {
-	os.Chdir("../..")
+	if err := os.Chdir("../.."); err != nil {
+		panic(err)
+	}
 	os.Exit(m.Run())
 }
 
@@ -56,7 +58,10 @@ func newServer() *httptest.Server {
 	}}
 	auth := libspotify.NewAuthenticator("http://example.com/callback")
 	auth.SetAuthInfo("id", "secret")
-	database, _ := db.New(":memory:")
+	database, err := db.New(":memory:")
+	if err != nil {
+		panic(err)
+	}
 	app := &handlers.Application{Music: fs, Authenticator: auth, DB: database, SignKey: testKey}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", app.Home)
