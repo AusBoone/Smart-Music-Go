@@ -52,7 +52,9 @@ func (app *Application) AddShareTrack(w http.ResponseWriter, r *http.Request) {
 		scheme = "https"
 	}
 	url := fmt.Sprintf("%s://%s/share/%s", scheme, r.Host, id)
-	json.NewEncoder(w).Encode(map[string]string{"url": url})
+	if err := json.NewEncoder(w).Encode(map[string]string{"url": url}); err != nil {
+		log.WithError(err).Error("encode share track url")
+	}
 }
 
 // ShareTrack renders a small HTML page describing a shared track. The share ID
@@ -123,7 +125,9 @@ func (app *Application) AddSharePlaylist(w http.ResponseWriter, r *http.Request)
 		scheme = "https"
 	}
 	url := fmt.Sprintf("%s://%s/share/playlist/%s", scheme, r.Host, id)
-	json.NewEncoder(w).Encode(map[string]string{"url": url})
+	if err := json.NewEncoder(w).Encode(map[string]string{"url": url}); err != nil {
+		log.WithError(err).Error("encode share playlist url")
+	}
 }
 
 // SharePlaylist displays an HTML page describing a shared playlist. The ID is

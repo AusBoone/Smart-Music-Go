@@ -65,7 +65,9 @@ func (f fakeSpotify) GetRecommendationsWithAttrs(ctx context.Context, seedIDs []
 
 func TestMain(m *testing.M) {
 	// change working directory to project root so template paths resolve
-	os.Chdir("../..")
+	if err := os.Chdir("../.."); err != nil {
+		panic(err)
+	}
 	os.Exit(m.Run())
 }
 
@@ -299,7 +301,10 @@ func TestAddFavoriteAuth(t *testing.T) {
 
 // TestAddFavoriteValidation verifies that missing fields return a 400 error.
 func TestAddFavoriteValidation(t *testing.T) {
-	d, _ := db.New(":memory:")
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodPost, "/favorites", strings.NewReader(`{}`))
 	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
@@ -314,7 +319,10 @@ func TestAddFavoriteValidation(t *testing.T) {
 // TestDeleteFavorite verifies that a stored favorite can be removed through the
 // API and that deleting a non-existent favorite returns 404.
 func TestDeleteFavorite(t *testing.T) {
-	d, _ := db.New(":memory:")
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
 	d.AddFavorite(context.Background(), "u", "1", "Song", "Artist")
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodDelete, "/api/favorites", strings.NewReader(`{"track_id":"1"}`))
@@ -343,7 +351,10 @@ func TestDeleteFavorite(t *testing.T) {
 
 // TestFavoritesCSV verifies that favorites can be exported as CSV.
 func TestFavoritesCSV(t *testing.T) {
-	d, _ := db.New(":memory:")
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
 	d.AddFavorite(context.Background(), "u", "1", "Song", "Artist")
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodGet, "/api/favorites.csv", nil)
@@ -444,7 +455,10 @@ func TestGoogleCallbackCookie(t *testing.T) {
 
 // TestAddShareTrack verifies a share link is created and returned as JSON.
 func TestAddShareTrack(t *testing.T) {
-	d, _ := db.New(":memory:")
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
 	app := &Application{DB: d, SignKey: testKey}
 	body := strings.NewReader(`{"track_id":"1","track_name":"Song","artist_name":"Artist"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/share/track", body)
@@ -464,7 +478,10 @@ func TestAddShareTrack(t *testing.T) {
 
 // TestAddSharePlaylist ensures playlists can be shared via the API.
 func TestAddSharePlaylist(t *testing.T) {
-	d, _ := db.New(":memory:")
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
 	app := &Application{DB: d, SignKey: testKey}
 	body := strings.NewReader(`{"playlist_id":"pl","playlist_name":"MyList"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/share/playlist", body)
@@ -502,7 +519,10 @@ func TestSecurityHeaders(t *testing.T) {
 
 // TestAddHistoryValidation ensures missing fields cause a 400 response.
 func TestAddHistoryValidation(t *testing.T) {
-	d, _ := db.New(":memory:")
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodPost, "/api/history", strings.NewReader(`{}`))
 	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
@@ -517,7 +537,10 @@ func TestAddHistoryValidation(t *testing.T) {
 // TestAddCollectionTrackValidation verifies that invalid JSON payloads
 // for AddCollectionTrackJSON return a 400 status.
 func TestAddCollectionTrackValidation(t *testing.T) {
-	d, _ := db.New(":memory:")
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodPost, "/api/collections/abc/tracks", strings.NewReader("{"))
 	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
@@ -531,7 +554,10 @@ func TestAddCollectionTrackValidation(t *testing.T) {
 
 // TestAddCollectionUserValidation ensures missing fields return 400.
 func TestAddCollectionUserValidation(t *testing.T) {
-	d, _ := db.New(":memory:")
+	d, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
 	app := &Application{DB: d, SignKey: testKey}
 	req := httptest.NewRequest(http.MethodPost, "/api/collections/abc/users", strings.NewReader(`{}`))
 	req.AddCookie(&http.Cookie{Name: "spotify_user_id", Value: signValue("u", testKey)})
@@ -566,7 +592,6 @@ func setAuthClient(a *libspotify.Authenticator, c *http.Client) {
 }
 
 type refreshRT struct {
-	t         *testing.T
 	tokenResp string
 	apiResp   string
 }

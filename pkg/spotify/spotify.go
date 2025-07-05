@@ -79,9 +79,7 @@ func (sc *SpotifyClient) SearchTrack(ctx context.Context, track string) ([]music
 
 	if results.Tracks != nil && len(results.Tracks.Tracks) > 0 {
 		tracks := make([]music.Track, len(results.Tracks.Tracks))
-		for i, t := range results.Tracks.Tracks {
-			tracks[i] = t
-		}
+		copy(tracks, results.Tracks.Tracks)
 		return tracks, nil
 	}
 

@@ -52,7 +52,9 @@ func New(path string) (*DB, error) {
 	// database file is not writable.
 	for _, s := range stmts {
 		if _, err := d.Exec(s); err != nil {
-			d.Close()
+			if cerr := d.Close(); cerr != nil {
+				err = fmt.Errorf("%v; close: %w", err, cerr)
+			}
 			return nil, fmt.Errorf("init db: %w", err)
 		}
 	}
@@ -123,15 +125,18 @@ type Favorite struct {
 // ListFavorites retrieves all favorites stored for the provided userID.
 // Results are returned in reverse insertion order so the most recently
 // saved tracks appear first.
-func (db *DB) ListFavorites(ctx context.Context, userID string) ([]Favorite, error) {
+func (db *DB) ListFavorites(ctx context.Context, userID string) (fs []Favorite, err error) {
 	// Query all favorites for the given user ordered by insertion time.
 	rows, err := db.QueryContext(ctx, `SELECT track_id, track_name, artist_name FROM favorites WHERE user_id=? ORDER BY id DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
-	var fs []Favorite
 	for rows.Next() {
 		var f Favorite
 		if err := rows.Scan(&f.TrackID, &f.TrackName, &f.ArtistName); err != nil {
@@ -140,7 +145,10 @@ func (db *DB) ListFavorites(ctx context.Context, userID string) ([]Favorite, err
 		fs = append(fs, f)
 	}
 	// rows.Err returns the first error encountered while iterating.
-	return fs, rows.Err()
+	if err == nil {
+		err = rows.Err()
+	}
+	return fs, err
 }
 
 // AddHistory inserts a listening event for the given user. playedAt should be
@@ -157,13 +165,16 @@ type ArtistCount struct {
 }
 
 // TopArtistsSince returns the most played artists since the provided time.
-func (db *DB) TopArtistsSince(ctx context.Context, userID string, since time.Time) ([]ArtistCount, error) {
+func (db *DB) TopArtistsSince(ctx context.Context, userID string, since time.Time) (res []ArtistCount, err error) {
 	rows, err := db.QueryContext(ctx, `SELECT artist_name, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY artist_name ORDER BY c DESC`, userID, since)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var res []ArtistCount
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 	for rows.Next() {
 		var ac ArtistCount
 		if err := rows.Scan(&ac.Artist, &ac.Count); err != nil {
@@ -171,7 +182,10 @@ func (db *DB) TopArtistsSince(ctx context.Context, userID string, since time.Tim
 		}
 		res = append(res, ac)
 	}
-	return res, rows.Err()
+	if err == nil {
+		err = rows.Err()
+	}
+	return res, err
 }
 
 // TrackCount represents how many times a specific track was played.
@@ -254,13 +268,16 @@ func (db *DB) GetShareTrack(ctx context.Context, id string) (ShareTrack, error) 
 }
 
 // TopTracksSince returns the most played tracks since the given time.
-func (db *DB) TopTracksSince(ctx context.Context, userID string, since time.Time) ([]TrackCount, error) {
+func (db *DB) TopTracksSince(ctx context.Context, userID string, since time.Time) (res []TrackCount, err error) {
 	rows, err := db.QueryContext(ctx, `SELECT track_id, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY track_id ORDER BY c DESC`, userID, since)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var res []TrackCount
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 	for rows.Next() {
 		var tc TrackCount
 		if err := rows.Scan(&tc.TrackID, &tc.Count); err != nil {
@@ -268,7 +285,10 @@ func (db *DB) TopTracksSince(ctx context.Context, userID string, since time.Time
 		}
 		res = append(res, tc)
 	}
-	return res, rows.Err()
+	if err == nil {
+		err = rows.Err()
+	}
+	return res, err
 }
 
 // CreateCollection inserts a new collaborative playlist owned by the specified user.
@@ -297,13 +317,16 @@ type CollectionTrack struct {
 }
 
 // ListCollectionTracks returns all tracks stored in the given collection.
-func (db *DB) ListCollectionTracks(ctx context.Context, colID string) ([]CollectionTrack, error) {
+func (db *DB) ListCollectionTracks(ctx context.Context, colID string) (res []CollectionTrack, err error) {
 	rows, err := db.QueryContext(ctx, `SELECT track_id, track_name, artist_name FROM collection_tracks WHERE collection_id=?`, colID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var res []CollectionTrack
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 	for rows.Next() {
 		var ct CollectionTrack
 		if err := rows.Scan(&ct.TrackID, &ct.TrackName, &ct.ArtistName); err != nil {
@@ -311,7 +334,10 @@ func (db *DB) ListCollectionTracks(ctx context.Context, colID string) ([]Collect
 		}
 		res = append(res, ct)
 	}
-	return res, rows.Err()
+	if err == nil {
+		err = rows.Err()
+	}
+	return res, err
 }
 
 // AddUserToCollection grants access to an existing collection for a user.
@@ -330,13 +356,16 @@ type MonthCount struct {
 
 // MonthlyPlayCountsSince aggregates listening history per month starting from
 // the provided time. Results are ordered chronologically.
-func (db *DB) MonthlyPlayCountsSince(ctx context.Context, userID string, since time.Time) ([]MonthCount, error) {
+func (db *DB) MonthlyPlayCountsSince(ctx context.Context, userID string, since time.Time) (res []MonthCount, err error) {
 	rows, err := db.QueryContext(ctx, `SELECT strftime('%Y-%m', played_at) m, COUNT(*) c FROM history WHERE user_id=? AND played_at>=? GROUP BY m ORDER BY m`, userID, since)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var res []MonthCount
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 	for rows.Next() {
 		var mc MonthCount
 		if err := rows.Scan(&mc.Month, &mc.Count); err != nil {
@@ -344,5 +373,8 @@ func (db *DB) MonthlyPlayCountsSince(ctx context.Context, userID string, since t
 		}
 		res = append(res, mc)
 	}
-	return res, rows.Err()
+	if err == nil {
+		err = rows.Err()
+	}
+	return res, err
 }
